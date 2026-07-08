@@ -21,6 +21,7 @@ const { startScheduler } = require("./lib/scheduler");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || "0.0.0.0";
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.static(path.join(__dirname, "public")));
@@ -167,7 +168,7 @@ app.get("*", (_req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-app.listen(PORT, () => {
-  console.log(`Instagram Watcher running on http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`Instagram Watcher running on http://${HOST}:${PORT}`);
   startScheduler();
 });
