@@ -1,0 +1,28 @@
+# fly.toml app configuration file generated for instagram-watcher on 2026-07-08
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+
+app = "instagram-watcher"
+primary_region = "ams"
+
+[build]
+
+[env]
+  PORT = "3000"
+  DATA_DIR = "/data"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[mounts]]
+  source = "watcher_data"
+  destination = "/data"
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

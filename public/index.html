@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#05070d" />
+  <title>Instagram Watcher</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["Inter", "ui-sans-serif", "system-ui", "Segoe UI", "Arial", "sans-serif"]
+          },
+          colors: {
+            ink: "#05070d",
+            panel: "#0d111c",
+            line: "rgba(255,255,255,.1)"
+          },
+          boxShadow: {
+            glow: "0 18px 70px rgba(236, 72, 153, .22)",
+            soft: "0 20px 60px rgba(2, 6, 23, .12)"
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+    :root { color-scheme: dark; }
+    .light { color-scheme: light; }
+    * { scrollbar-width: thin; scrollbar-color: rgba(236,72,153,.55) transparent; }
+    body {
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(168, 85, 247, .28), transparent 34rem),
+        radial-gradient(circle at 90% 8%, rgba(236, 72, 153, .22), transparent 30rem),
+        #05070d;
+    }
+    .light body, body.light {
+      background:
+        radial-gradient(circle at top left, rgba(168, 85, 247, .14), transparent 34rem),
+        radial-gradient(circle at 90% 8%, rgba(236, 72, 153, .13), transparent 30rem),
+        #f8fafc;
+    }
+    .ig-ring {
+      background: conic-gradient(from 210deg, #f97316, #ec4899, #8b5cf6, #06b6d4, #f97316);
+    }
+    .surface {
+      background: rgba(13, 17, 28, .78);
+      border: 1px solid rgba(255,255,255,.1);
+      backdrop-filter: blur(18px);
+    }
+    .light .surface {
+      background: rgba(255,255,255,.82);
+      border-color: rgba(15,23,42,.1);
+    }
+    .premium-row {
+      transition: transform .2s ease, background .2s ease, border-color .2s ease;
+    }
+    .premium-row:hover {
+      transform: translateY(-1px);
+      background: rgba(255,255,255,.06);
+      border-color: rgba(236,72,153,.36);
+    }
+    .light .premium-row:hover { background: rgba(15,23,42,.04); }
+    .light .text-white,
+    .light [class*="light:text-slate-950"] {
+      color: #0f172a !important;
+    }
+    .light .text-slate-100,
+    .light .text-slate-200,
+    .light .text-slate-300 {
+      color: #475569 !important;
+    }
+    .light .text-slate-400 {
+      color: #64748b !important;
+    }
+    .light .text-pink-300 {
+      color: #db2777 !important;
+    }
+    .light .text-violet-300 {
+      color: #7c3aed !important;
+    }
+    .light .text-emerald-300 {
+      color: #059669 !important;
+    }
+    .light .text-rose-300 {
+      color: #e11d48 !important;
+    }
+    .light .text-sky-300 {
+      color: #0284c7 !important;
+    }
+    .light .bg-ink {
+      background-color: #ffffff !important;
+    }
+    .light .bg-white\/5,
+    .light .bg-white\/\[\.03\],
+    .light [class*="light:bg-slate-50"],
+    .light [class*="light:bg-slate-100"] {
+      background-color: rgba(15, 23, 42, .045) !important;
+    }
+    .light .border-white\/10,
+    .light [class*="light:border-slate-200"] {
+      border-color: rgba(15, 23, 42, .12) !important;
+    }
+    .light .bg-black\/20 {
+      background-color: rgba(15, 23, 42, .08) !important;
+    }
+    .tab-active {
+      background: linear-gradient(135deg, rgba(168,85,247,.9), rgba(236,72,153,.9));
+      color: white;
+      box-shadow: 0 12px 32px rgba(236,72,153,.22);
+    }
+    .drag-active {
+      border-color: rgba(236,72,153,.85) !important;
+      background: rgba(236,72,153,.08) !important;
+    }
+    .spin { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Mobile-first layout */
+    .mobile-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+      padding-bottom: env(safe-area-inset-bottom, 0);
+    }
+    @media (min-width: 1024px) {
+      .mobile-nav { display: none; }
+      .main-content { padding-bottom: 0 !important; }
+    }
+    .main-content {
+      padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0));
+    }
+    .nav-item-active {
+      color: #f472b6;
+      background: rgba(236, 72, 153, .12);
+    }
+    .touch-target { min-height: 44px; min-width: 44px; }
+    .log-info { color: #94a3b8; }
+    .log-success { color: #34d399; }
+    .log-warn { color: #fbbf24; }
+    .log-error { color: #fb7185; }
+  </style>
+</head>
+<body class="text-slate-100 antialiased">
+  <div id="app" class="min-h-screen"></div>
+
+  <script>
+    const STORAGE_KEY = "instagram-watcher:snapshots";
+    const SETTINGS_KEY = "instagram-watcher:settings";
+    const DB_NAME = "instagram-watcher-db";
+    const DB_VERSION = 1;
+
+    const demoFollowers = ["maya.design", "roni.studio", "david.ai", "noa.moves", "eden.photo", "lior.codes", "tal.travel", "yuval.fm", "bar.style", "shira.art", "amit.design", "neta.fit"];
+    const demoFollowing = ["maya.design", "roni.studio", "david.ai", "noa.moves", "eden.photo", "brand.lab", "visual.archive", "music.daily", "studio.eden", "coffee.telaviv", "amit.design", "creator.tools", "neta.fit"];
+
+    const SYNC_INTERVALS = {
+      "5m": 5 * 60 * 1000,
+      "10m": 10 * 60 * 1000,
+      "15m": 15 * 60 * 1000,
+      "30m": 30 * 60 * 1000,
+      "1h": 60 * 60 * 1000,
+      "6h": 6 * 60 * 60 * 1000,
+      "24h": 24 * 60 * 60 * 1000
+    };
+
+    const RATE_LIMIT = {
+      minGapMs: SYNC_INTERVALS["5m"],
+      jitterMaxMs: 30 * 1000,
+      backoffMinutes: [5, 15, 30, 60, 120]
+    };
+
+    let syncTimer = null;
+    let cooldownTicker = null;
+
+    const state = {
+      tab: "all",
+      view: "dashboard",
+      query: "",
+      theme: localStorage.getItem("instagram-watcher:theme") || "dark",
+      uploadStatus: "idle",
+      copied: "",
+      storageReady: false,
+      storageStatus: "Local fallback ready",
+      serverMode: false,
+      serverStatus: "Checking server...",
+      logs: [],
+      selectedSnapshot: null,
+      syncInProgress: false,
+      watcher: loadSettings(),
+      snapshots: loadSnapshots()
+    };
+
+    const API = {
+      async get(path) {
+        const res = await fetch(path);
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      },
+      async send(method, path, body) {
+        const res = await fetch(path, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: body ? JSON.stringify(body) : undefined
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
+        return res.json();
+      }
+    };
+
+    function defaultSettings() {
+      return {
+        username: "",
+        connected: false,
+        running: false,
+        interval: "5m",
+        lastSync: null,
+        health: "Ready",
+        rateLimitUntil: null,
+        consecutiveErrors: 0
+      };
+    }
+
+    function normalizeSettings(settings = {}) {
+      const defaults = defaultSettings();
+      const merged = { ...defaults, ...settings };
+      if (!SYNC_INTERVALS[merged.interval]) merged.interval = "5m";
+      merged.consecutiveErrors = Number(merged.consecutiveErrors) || 0;
+      merged.rateLimitUntil = merged.rateLimitUntil || null;
+      merged.running = Boolean(merged.running);
+      return merged;
+    }
+
+    function loadSettings() {
+      try {
+        return normalizeSettings(JSON.parse(localStorage.getItem(SETTINGS_KEY)));
+      } catch {
+        return defaultSettings();
+      }
+    }
+
+    function loadSnapshots() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+        return saved.length ? saved : [makeSnapshot("Demo snapshot", demoFollowers, demoFollowing, new Date(Date.now() - 86400000 * 2))];
+      } catch {
+        return [makeSnapshot("Demo snapshot", demoFollowers, demoFollowing, new Date(Date.now() - 86400000 * 2))];
+      }
+    }
+
+    async function openDatabase() {
+      if (!("indexedDB" in window)) throw new Error("IndexedDB is not available");
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains("app")) db.createObjectStore("app");
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    async function readDatabaseValue(key) {
+      const db = await openDatabase();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction("app", "readonly");
+        const request = tx.objectStore("app").get(key);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+        tx.oncomplete = () => db.close();
+      });
+    }
+
+    async function writeDatabaseValue(key, value) {
+      const db = await openDatabase();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction("app", "readwrite");
+        tx.objectStore("app").put(value, key);
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    async function initStorage() {
+      try {
+        await initServerMode();
+        if (state.serverMode) {
+          await refreshFromServer();
+          state.storageReady = true;
+          state.storageStatus = "Server storage active";
+        } else {
+          const [snapshots, settings] = await Promise.all([
+            readDatabaseValue("snapshots"),
+            readDatabaseValue("settings")
+          ]);
+          if (Array.isArray(snapshots) && snapshots.length) state.snapshots = snapshots;
+          if (settings) state.watcher = normalizeSettings(settings);
+          await persistAll();
+          state.storageReady = true;
+          state.storageStatus = "IndexedDB active";
+          refreshWatcherHealth();
+          startWatcherScheduler();
+        }
+      } catch (error) {
+        console.warn(error);
+        state.storageReady = false;
+        state.storageStatus = "Local fallback active";
+      }
+      startCooldownTicker();
+      render();
+    }
+
+    async function initServerMode() {
+      try {
+        const status = await API.get("/api/status");
+        state.serverMode = true;
+        state.serverStatus = status.watcher.running ? "Running 24/7 on server" : "Server ready (paused)";
+        state.watcher = normalizeSettings(status.watcher);
+        state.syncInProgress = Boolean(status.watcher.syncInProgress);
+        startServerPolling();
+      } catch {
+        state.serverMode = false;
+        state.serverStatus = "Offline — using browser storage";
+      }
+    }
+
+    async function refreshFromServer() {
+      const [snapshots, logs, status] = await Promise.all([
+        API.get("/api/snapshots"),
+        API.get("/api/logs?limit=100"),
+        API.get("/api/status")
+      ]);
+      state.snapshots = snapshots.length ? snapshots : state.snapshots;
+      state.logs = logs;
+      state.watcher = normalizeSettings(status.watcher);
+      state.syncInProgress = Boolean(status.watcher.syncInProgress);
+      state.serverStatus = status.watcher.running ? "Running 24/7 on server" : "Server ready (paused)";
+    }
+
+    let serverPollTimer = null;
+    function startServerPolling() {
+      if (serverPollTimer) clearInterval(serverPollTimer);
+      if (!state.serverMode) return;
+      serverPollTimer = setInterval(async () => {
+        try {
+          await refreshFromServer();
+          refreshWatcherHealth();
+          if (state.view === "logs" || state.tab === "logs") updateLogsOnly();
+          else updateCooldownBadges();
+        } catch (error) {
+          console.warn("Server poll failed", error);
+        }
+      }, 10000);
+    }
+
+    function updateLogsOnly() {
+      const container = document.getElementById("logsContainer");
+      if (container) container.innerHTML = logsListInner();
+    }
+
+    async function persistAll() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.snapshots));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.watcher));
+      await Promise.all([
+        writeDatabaseValue("snapshots", state.snapshots),
+        writeDatabaseValue("settings", state.watcher)
+      ]);
+    }
+
+    function saveSnapshots() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.snapshots));
+      writeDatabaseValue("snapshots", state.snapshots).catch(error => {
+        console.warn(error);
+        state.storageStatus = "Local fallback active";
+      });
+    }
+
+    function saveSettings() {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.watcher));
+      writeDatabaseValue("settings", state.watcher).catch(error => {
+        console.warn(error);
+        state.storageStatus = "Local fallback active";
+      });
+    }
+
+    function makeSnapshot(label, followers, following, date = new Date()) {
+      const cleanFollowers = uniqueUsernames(followers);
+      const cleanFollowing = uniqueUsernames(following);
+      return {
+        id: window.crypto && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+        label,
+        date: date.toISOString(),
+        followers: cleanFollowers,
+        following: cleanFollowing
+      };
+    }
+
+    function uniqueUsernames(values) {
+      return [...new Set(values.map(normalizeUsername).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    }
+
+    function normalizeUsername(value) {
+      return String(value || "")
+        .trim()
+        .replace(/^@/, "")
+        .replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+        .split(/[/?#]/)[0]
+        .toLowerCase()
+        .replace(/[^a-z0-9._]/g, "");
+    }
+
+    function latestSnapshot() {
+      return [...state.snapshots].sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+    }
+
+    function previousSnapshot() {
+      const sorted = [...state.snapshots].sort((a, b) => new Date(b.date) - new Date(a.date));
+      return sorted[1] || null;
+    }
+
+    function diffData(snapshot = latestSnapshot()) {
+      const followers = new Set(snapshot.followers);
+      const following = new Set(snapshot.following);
+      const unfollowers = snapshot.following.filter(user => !followers.has(user));
+      const fans = snapshot.followers.filter(user => !following.has(user));
+      const mutuals = snapshot.followers.filter(user => following.has(user));
+      return { followers: snapshot.followers, following: snapshot.following, unfollowers, fans, mutuals };
+    }
+
+    function watchedName() {
+      const username = normalizeUsername(state.watcher.username);
+      return username ? `@${username}` : "She";
+    }
+
+    function watchedLabel() {
+      const username = normalizeUsername(state.watcher.username);
+      return username ? `@${username}` : "her";
+    }
+
+    const CHANGE_TYPES = {
+      followed_her: { icon: "user-plus", tone: "emerald", rowClass: "bg-emerald-400/10 text-emerald-300" },
+      unfollowed_her: { icon: "user-minus", tone: "rose", rowClass: "bg-rose-400/10 text-rose-300" },
+      she_followed: { icon: "user-round-plus", tone: "sky", rowClass: "bg-sky-400/10 text-sky-300" },
+      she_unfollowed: { icon: "user-round-minus", tone: "amber", rowClass: "bg-amber-400/10 text-amber-300" }
+    };
+
+    function changeDescription(change) {
+      const subject = watchedName();
+      const her = watchedLabel();
+      if (change.category === "followed_her") return `@${change.user} followed ${her}`;
+      if (change.category === "unfollowed_her") return `@${change.user} unfollowed ${her}`;
+      if (change.category === "she_followed") return `${subject} followed @${change.user}`;
+      return `${subject} unfollowed @${change.user}`;
+    }
+
+    function changeShortLabel(change) {
+      const labels = {
+        followed_her: "Followed her",
+        unfollowed_her: "Unfollowed her",
+        she_followed: "She followed",
+        she_unfollowed: "She unfollowed"
+      };
+      return labels[change.category];
+    }
+
+    function recentChanges() {
+      const current = latestSnapshot();
+      const prev = previousSnapshot();
+      if (!current || !prev) return [];
+      const currentFollowers = new Set(current.followers);
+      const previousFollowers = new Set(prev.followers);
+      const currentFollowing = new Set(current.following);
+      const previousFollowing = new Set(prev.following);
+      const changes = [
+        ...prev.followers.filter(user => !currentFollowers.has(user)).map(user => ({ category: "unfollowed_her", user, date: current.date })),
+        ...current.followers.filter(user => !previousFollowers.has(user)).map(user => ({ category: "followed_her", user, date: current.date })),
+        ...prev.following.filter(user => !currentFollowing.has(user)).map(user => ({ category: "she_unfollowed", user, date: current.date })),
+        ...current.following.filter(user => !previousFollowing.has(user)).map(user => ({ category: "she_followed", user, date: current.date }))
+      ];
+      return changes.sort((a, b) => new Date(b.date) - new Date(a.date));
+    }
+
+    function icon(name, cls = "w-5 h-5") {
+      return `<i data-lucide="${name}" class="${cls}"></i>`;
+    }
+
+    function render() {
+      document.documentElement.classList.toggle("light", state.theme === "light");
+      document.body.classList.toggle("light", state.theme === "light");
+      const snapshot = latestSnapshot();
+      const data = diffData(snapshot);
+      const changes = recentChanges();
+      const tabs = [
+        ["all", "All", changes.length, "activity"],
+        ["followed_her", "Followed her", changes.filter(c => c.category === "followed_her").length, "user-plus"],
+        ["unfollowed_her", "Unfollowed her", changes.filter(c => c.category === "unfollowed_her").length, "user-minus"],
+        ["she_followed", "She followed", changes.filter(c => c.category === "she_followed").length, "user-round-plus"],
+        ["she_unfollowed", "She unfollowed", changes.filter(c => c.category === "she_unfollowed").length, "user-round-minus"]
+      ];
+
+      document.getElementById("app").innerHTML = `
+        <div class="mx-auto flex min-h-screen w-full max-w-[1500px] flex-col lg:flex-row">
+          ${sidebar()}
+          <main class="main-content flex-1 px-3 py-3 sm:px-6 lg:px-8 lg:py-4">
+            ${topbar(snapshot)}
+            ${state.view === "dashboard" ? stats(data) : ""}
+            <section class="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px] lg:mt-5 lg:gap-5">
+              <div class="space-y-4 lg:space-y-5">
+                ${state.view === "dashboard" ? `${watcherPanel()}${uploadPanel()}` : ""}
+                ${state.view === "lists" ? audiencePanel(data, changes, tabs) : ""}
+                ${state.view === "logs" ? logsPanel() : ""}
+                ${state.view === "settings" ? `${storagePanel()}${instructionsPanel()}` : ""}
+              </div>
+              <aside class="hidden space-y-5 xl:block">
+                ${storagePanel()}
+                ${instructionsPanel()}
+              </aside>
+            </section>
+          </main>
+          ${mobileNav()}
+        </div>
+      `;
+
+      lucide.createIcons();
+      bindEvents();
+    }
+
+    function sidebar() {
+      return `
+        <aside class="sticky top-0 z-20 flex items-center justify-between border-b border-white/10 bg-ink/80 px-4 py-3 backdrop-blur-xl light:bg-white/85 lg:h-screen lg:w-72 lg:flex-col lg:items-stretch lg:border-b-0 lg:border-r lg:px-5 lg:py-6">
+          <div>
+            <div class="flex items-center gap-3">
+              <div class="ig-ring grid h-12 w-12 place-items-center rounded-2xl p-[2px] shadow-glow">
+                <div class="grid h-full w-full place-items-center rounded-[14px] bg-ink text-white">${icon("instagram", "h-6 w-6")}</div>
+              </div>
+              <div>
+                <h1 class="text-lg font-extrabold tracking-tight text-white light:text-slate-950">Watcher</h1>
+                <p class="text-xs text-slate-400">Private follower intelligence</p>
+              </div>
+            </div>
+            <nav class="mt-8 hidden space-y-2 lg:block">
+              ${["Dashboard", "Watcher Sync", "Import", "History", "Storage"].map((item, index) => `
+                <a href="#" class="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold ${index === 0 ? "bg-white/10 text-white light:bg-slate-100 light:text-slate-950" : "text-slate-400 hover:bg-white/5 hover:text-white light:hover:bg-slate-100 light:hover:text-slate-950"}">
+                  ${icon(["layout-dashboard", "radar", "upload-cloud", "clock-3", "database"][index], "h-4 w-4")} ${item}
+                </a>
+              `).join("")}
+            </nav>
+          </div>
+          <button id="themeToggle" class="grid h-11 w-11 place-items-center rounded-2xl border border-white/10 bg-white/5 text-slate-200 transition hover:border-pink-400 hover:text-white light:border-slate-200 light:bg-slate-50 light:text-slate-700">
+            ${icon(state.theme === "dark" ? "sun" : "moon", "h-5 w-5")}
+          </button>
+        </aside>
+      `;
+    }
+
+    function topbar(snapshot) {
+      return `
+        <header class="surface rounded-[30px] p-5 sm:p-6">
+          <div class="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p class="text-sm font-semibold uppercase tracking-[.22em] text-pink-300">Instagram-native dashboard</p>
+              <h2 class="mt-2 text-3xl font-extrabold tracking-tight text-white light:text-slate-950 sm:text-4xl">Know who stayed, left, and came back.</h2>
+              <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-400 light:text-slate-600">${state.serverMode ? "Connected to your 24/7 server. Set a username, start the watcher, and it keeps running even when you close this tab." : "Connect a watcher profile for scheduled sync, or import official Instagram exports."}</p>
+            </div>
+            <div class="rounded-3xl border border-white/10 bg-white/5 p-4 light:border-slate-200 light:bg-slate-50">
+              <div class="flex items-center gap-3">
+                <div class="ig-ring h-14 w-14 rounded-full p-[2px]"><div class="grid h-full w-full place-items-center rounded-full bg-ink text-lg font-bold light:bg-white light:text-slate-950">IG</div></div>
+                <div>
+                  <p class="text-sm font-bold text-white light:text-slate-950">${state.watcher.connected ? "@" + escapeHtml(state.watcher.username) : "Watcher not connected"}</p>
+                  <p class="text-xs text-slate-400">${state.serverStatus}</p>
+                  <p class="text-xs text-slate-400">Latest snapshot: ${formatDate(snapshot.date)}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+      `;
+    }
+
+    function stats(data) {
+      const cards = [
+        ["Total Followers", data.followers.length, "trending-up", "+ synced", "bg-emerald-500/15 text-emerald-300"],
+        ["Total Following", data.following.length, "user-round-plus", "tracked", "bg-sky-500/15 text-sky-300"],
+        ["Not Following Me Back", data.unfollowers.length, "user-minus", "review", "bg-pink-500/15 text-pink-300"],
+        ["I Don't Follow Back", data.fans.length, "sparkles", "fans", "bg-violet-500/15 text-violet-300"]
+      ];
+      return `
+        <section class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          ${cards.map(([label, value, cardIcon, meta, toneClass]) => `
+            <article class="surface group rounded-[26px] p-5 transition duration-200 hover:-translate-y-1 hover:shadow-glow">
+              <div class="flex items-center justify-between">
+                <div class="grid h-12 w-12 place-items-center rounded-2xl ${toneClass}">${icon(cardIcon, "h-5 w-5")}</div>
+                <span class="rounded-full bg-emerald-400/10 px-2.5 py-1 text-xs font-bold text-emerald-300">${meta}</span>
+              </div>
+              <p class="mt-5 text-sm text-slate-400">${label}</p>
+              <p class="mt-1 text-3xl font-extrabold text-white light:text-slate-950">${value.toLocaleString()}</p>
+            </article>
+          `).join("")}
+        </section>
+      `;
+    }
+
+    function audiencePanel(data, changes, tabs) {
+      return `
+        <section class="surface rounded-[24px] p-4 sm:rounded-[28px] sm:p-5">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p class="text-sm font-semibold uppercase tracking-[.22em] text-pink-300">Follow activity</p>
+              <h2 class="mt-1 text-xl font-bold text-white light:text-slate-950 sm:text-2xl">Who followed or unfollowed ${escapeHtml(watchedLabel())}</h2>
+            </div>
+            <label class="relative block w-full lg:max-w-xs">
+              ${icon("search", "pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400")}
+              <input id="searchInput" value="${escapeHtml(state.query)}" placeholder="Search username" class="w-full rounded-2xl border border-white/10 bg-white/5 py-3 pl-10 pr-4 text-sm outline-none transition focus:border-pink-400 light:border-slate-200 light:bg-slate-50 light:text-slate-950" />
+            </label>
+          </div>
+          <div class="mt-4 flex gap-2 overflow-x-auto pb-1 sm:mt-5">
+            ${tabs.map(([id, label, count, tabIcon]) => `
+              <button data-tab="${id}" class="tab-btn touch-target flex shrink-0 items-center gap-2 rounded-2xl px-3 py-2.5 text-sm font-semibold transition sm:px-4 ${state.tab === id ? "tab-active" : "bg-white/5 text-slate-300 hover:bg-white/10 light:bg-slate-100 light:text-slate-700"}">
+                ${icon(tabIcon, "h-4 w-4")} ${label}
+                <span class="rounded-full bg-black/20 px-2 py-0.5 text-xs">${count}</span>
+              </button>
+            `).join("")}
+          </div>
+          ${listContent(data, changes)}
+        </section>
+      `;
+    }
+
+    function logsPanel() {
+      return `
+        <section class="surface rounded-[24px] p-4 sm:rounded-[28px] sm:p-5">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p class="text-sm font-semibold uppercase tracking-[.22em] text-pink-300">Activity</p>
+              <h2 class="mt-1 text-xl font-bold text-white light:text-slate-950 sm:text-2xl">Server logs</h2>
+              <p class="mt-1 text-sm text-slate-400">Sync events, start/stop actions, and errors from your 24/7 watcher.</p>
+            </div>
+            <button id="clearLogs" class="touch-target rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-2.5 text-sm font-bold text-rose-300">${icon("trash-2", "mr-2 inline h-4 w-4")} Clear logs</button>
+          </div>
+          <div id="logsContainer" class="mt-4 max-h-[70vh] overflow-y-auto rounded-3xl border border-white/10 light:border-slate-200">
+            ${logsListInner()}
+          </div>
+        </section>
+      `;
+    }
+
+    function logsListInner() {
+      if (!state.logs.length) return emptyState("No logs yet", "Start the watcher or run a sync to see activity here.");
+      return state.logs.map(log => `
+        <div class="flex flex-col gap-1 border-b border-white/10 p-4 last:border-b-0 light:border-slate-200 sm:flex-row sm:items-start sm:justify-between">
+          <div class="min-w-0">
+            <p class="text-sm font-bold log-${log.level}">${escapeHtml(log.message)}</p>
+            ${log.detail ? `<p class="mt-1 text-xs text-slate-400">${escapeHtml(log.detail)}</p>` : ""}
+          </div>
+          <span class="shrink-0 text-xs text-slate-500">${formatDate(log.createdAt)}</span>
+        </div>
+      `).join("");
+    }
+
+    function mobileNav() {
+      const items = [
+        ["dashboard", "Home", "layout-dashboard"],
+        ["lists", "Activity", "activity"],
+        ["logs", "Logs", "scroll-text"],
+        ["settings", "Data", "database"]
+      ];
+      return `
+        <nav class="mobile-nav surface border-t border-white/10 light:border-slate-200">
+          <div class="grid grid-cols-4 gap-1 px-2 py-2">
+            ${items.map(([id, label, navIcon]) => `
+              <button data-view="${id}" class="view-btn flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-semibold text-slate-400 transition ${state.view === id ? "nav-item-active" : ""}">
+                ${icon(navIcon, "h-5 w-5")}
+                ${label}
+              </button>
+            `).join("")}
+          </div>
+        </nav>
+      `;
+    }
+
+    function watcherPanel() {
+      const isRunning = state.watcher.running;
+      return `
+        <section class="surface rounded-[24px] p-4 sm:rounded-[28px] sm:p-5">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="text-sm font-semibold uppercase tracking-[.22em] text-pink-300">Watcher sync</p>
+              <h2 class="mt-1 text-xl font-bold text-white light:text-slate-950 sm:text-2xl">${isRunning ? "Running 24/7" : "Connect a watcher profile"}</h2>
+              <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-400 light:text-slate-600">Save your username and interval — the server keeps checking every 5 minutes with rate-limit protection, even when you close this tab.</p>
+            </div>
+            <div data-watcher-health class="flex items-center gap-2 rounded-2xl border ${isRunning ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300" : "border-amber-400/20 bg-amber-400/10 text-amber-300"} px-3 py-2 text-sm font-semibold">
+              ${icon(isRunning ? "play-circle" : "pause-circle", "h-4 w-4")} ${state.watcher.health}
+            </div>
+          </div>
+          <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_120px_120px]">
+            <input id="watcherUsername" value="${escapeHtml(state.watcher.username)}" placeholder="Instagram username" class="touch-target rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base outline-none transition focus:border-pink-400 light:border-slate-200 light:bg-slate-50 light:text-slate-950 sm:text-sm" />
+            <select id="syncInterval" class="touch-target rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none light:border-slate-200 light:bg-slate-50 light:text-slate-950">
+              ${Object.keys(SYNC_INTERVALS).map(v => `<option value="${v}" ${state.watcher.interval === v ? "selected" : ""}>${v}</option>`).join("")}
+            </select>
+            <button id="saveWatcher" class="touch-target rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-white transition hover:border-pink-400 light:border-slate-200 light:bg-slate-50 light:text-slate-950">${icon("save", "mr-1 inline h-4 w-4")} Save</button>
+          </div>
+          <div class="mt-3 grid gap-3 sm:grid-cols-3">
+            <button id="startWatcher" ${!state.watcher.username || isRunning ? "disabled" : ""} class="touch-target rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-3 text-sm font-bold text-white shadow-glow transition enabled:hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40">${icon("play", "mr-1 inline h-4 w-4")} Start 24/7</button>
+            <button id="stopWatcher" ${!isRunning ? "disabled" : ""} class="touch-target rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm font-bold text-amber-200 transition enabled:hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-40">${icon("pause", "mr-1 inline h-4 w-4")} Pause</button>
+            <button id="connectWatcher" ${syncButtonDisabled() ? "disabled" : ""} class="touch-target rounded-2xl bg-gradient-to-r from-violet-500 to-pink-500 px-4 py-3 text-sm font-bold text-white shadow-glow transition enabled:hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50">${syncButtonLabel()}</button>
+          </div>
+          <div class="mt-4 flex flex-wrap gap-2 text-xs text-slate-400">
+            <span class="rounded-full bg-white/5 px-3 py-1.5 light:bg-slate-100">Last sync: ${state.watcher.lastSync ? formatDate(state.watcher.lastSync) : "Never"}</span>
+            <span id="nextSyncBadge" class="rounded-full bg-white/5 px-3 py-1.5 light:bg-slate-100">Next safe check: ${nextSyncText()}</span>
+            <span id="cooldownBadge" class="rounded-full bg-white/5 px-3 py-1.5 light:bg-slate-100">${cooldownBadgeText()}</span>
+            <span class="rounded-full bg-white/5 px-3 py-1.5 light:bg-slate-100">${state.serverMode ? "Server: online" : "Mode: browser only"}</span>
+          </div>
+        </section>
+      `;
+    }
+
+    function uploadPanel() {
+      const status = {
+        idle: ["upload-cloud", "Drop followers/following JSON or HTML exports", "Private import fallback"],
+        loading: ["loader-2", "Processing files locally", "Parsing usernames"],
+        success: ["check-circle-2", "Snapshot saved", "Dashboard updated"],
+        error: ["alert-triangle", "Could not read both lists", "Try followers and following files"]
+      }[state.uploadStatus];
+      return `
+        <section id="dropZone" class="surface rounded-[28px] border-dashed p-5 transition">
+          <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div class="flex items-center gap-4">
+              <div class="grid h-14 w-14 place-items-center rounded-2xl bg-white/5 text-pink-300 light:bg-slate-100">
+                ${icon(status[0], `h-6 w-6 ${state.uploadStatus === "loading" ? "spin" : ""}`)}
+              </div>
+              <div>
+                <h3 class="text-lg font-bold text-white light:text-slate-950">${status[1]}</h3>
+                <p class="text-sm text-slate-400">${status[2]}</p>
+              </div>
+            </div>
+            <label class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-white transition hover:border-pink-400 light:border-slate-200 light:bg-slate-50 light:text-slate-950">
+              ${icon("file-plus-2", "h-4 w-4")} Choose files
+              <input id="fileInput" type="file" multiple accept=".json,.html,.htm" class="hidden" />
+            </label>
+          </div>
+        </section>
+      `;
+    }
+
+    function listContent(data, changes) {
+      const filtered = changes.filter(change => {
+        if (state.tab !== "all" && change.category !== state.tab) return false;
+        if (!state.query) return true;
+        return change.user.includes(state.query.toLowerCase());
+      });
+      return historyList(filtered);
+    }
+
+    function historyList(changes) {
+      const emptyMessages = {
+        all: ["No follow changes yet", "Sync or import two snapshots to see who followed or unfollowed."],
+        followed_her: ["No new followers", "Nobody started following her since the last snapshot."],
+        unfollowed_her: ["No unfollows", "Nobody unfollowed her since the last snapshot."],
+        she_followed: ["She didn't follow anyone new", "She hasn't followed anyone new since the last snapshot."],
+        she_unfollowed: ["She didn't unfollow anyone", "She hasn't unfollowed anyone since the last snapshot."]
+      };
+      const [title, body] = emptyMessages[state.tab] || emptyMessages.all;
+      return `
+        <div class="mt-5 overflow-hidden rounded-3xl border border-white/10 light:border-slate-200">
+          ${changes.length ? changes.map(change => {
+            const meta = CHANGE_TYPES[change.category];
+            return `
+            <div class="premium-row flex flex-col gap-3 border-b border-white/10 p-4 last:border-b-0 light:border-slate-200 sm:flex-row sm:items-center sm:justify-between">
+              <div class="flex min-w-0 items-center gap-3">
+                <div class="grid h-11 w-11 shrink-0 place-items-center rounded-full ${meta.rowClass}">${icon(meta.icon, "h-5 w-5")}</div>
+                <div class="min-w-0">
+                  <p class="text-sm font-bold text-white light:text-slate-950">${escapeHtml(changeDescription(change))}</p>
+                  <p class="text-xs text-slate-400">${formatDate(change.date)}</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 sm:shrink-0">
+                <span class="rounded-full px-3 py-1 text-xs font-bold ${meta.rowClass}">${changeShortLabel(change)}</span>
+                <button data-copy="${escapeHtml(change.user)}" class="copy-btn grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/5 text-slate-300 transition hover:border-pink-400 hover:text-white light:border-slate-200 light:bg-slate-50 light:text-slate-700" title="Copy username">
+                  ${state.copied === change.user ? icon("check", "h-4 w-4 text-emerald-300") : icon("copy", "h-4 w-4")}
+                </button>
+                <a href="https://instagram.com/${encodeURIComponent(change.user)}" target="_blank" rel="noreferrer" class="grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/5 text-slate-300 transition hover:border-pink-400 hover:text-white light:border-slate-200 light:bg-slate-50 light:text-slate-700" title="Open profile">${icon("external-link", "h-4 w-4")}</a>
+              </div>
+            </div>
+          `;
+          }).join("") : emptyState(title, body)}
+        </div>
+      `;
+    }
+
+    function storagePanel() {
+      return `
+        <section class="surface rounded-[28px] p-5">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-semibold uppercase tracking-[.22em] text-pink-300">Data</p>
+              <h3 class="mt-1 text-xl font-bold text-white light:text-slate-950">Saved snapshots</h3>
+            </div>
+            <div class="grid h-11 w-11 place-items-center rounded-2xl bg-white/5 text-pink-300 light:bg-slate-100">${icon("database", "h-5 w-5")}</div>
+          </div>
+          <div class="mt-4 flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[.03] p-3 text-xs font-semibold text-slate-300 light:border-slate-200 light:bg-slate-50 light:text-slate-600">
+            ${icon(state.storageReady ? "badge-check" : "hard-drive", `h-4 w-4 ${state.storageReady ? "text-emerald-300" : "text-amber-300"}`)}
+            ${state.storageStatus}
+          </div>
+          <div class="mt-4 space-y-3">
+            ${[...state.snapshots].sort((a,b) => new Date(b.date) - new Date(a.date)).map(s => `
+              <div class="rounded-2xl border border-white/10 bg-white/[.03] p-3 light:border-slate-200 light:bg-slate-50">
+                <p class="text-sm font-bold text-white light:text-slate-950">${escapeHtml(s.label)}</p>
+                <p class="mt-1 text-xs text-slate-400">${formatDate(s.date)} &middot; ${s.followers.length} followers &middot; ${s.following.length} following</p>
+              </div>
+            `).join("")}
+          </div>
+          <div class="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+            <button id="exportData" class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-white transition hover:border-pink-400 light:border-slate-200 light:bg-slate-50 light:text-slate-950">${icon("download", "mr-2 inline h-4 w-4")} Export data</button>
+            <label class="cursor-pointer rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm font-bold text-white transition hover:border-pink-400 light:border-slate-200 light:bg-slate-50 light:text-slate-950">
+              ${icon("upload", "mr-2 inline h-4 w-4")} Restore data
+              <input id="restoreDataInput" type="file" accept=".json,application/json" class="hidden" />
+            </label>
+          </div>
+          <button id="clearData" class="mt-4 w-full rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm font-bold text-rose-300 transition hover:border-rose-300">Clear stored data</button>
+        </section>
+      `;
+    }
+
+    function instructionsPanel() {
+      return `
+        <section class="surface rounded-[28px] p-5">
+          <div class="flex items-center gap-3">
+            <div class="grid h-11 w-11 place-items-center rounded-2xl bg-white/5 text-violet-300 light:bg-slate-100">${icon("info", "h-5 w-5")}</div>
+            <h3 class="text-xl font-bold text-white light:text-slate-950">How imports work</h3>
+          </div>
+          <div class="mt-4 space-y-3 text-sm leading-6 text-slate-400 light:text-slate-600">
+            <p>Use Instagram's data download and import followers/following JSON or HTML files. The app extracts usernames in your browser and saves a dated snapshot locally.</p>
+            <p>Two snapshots unlock the recent changes timeline. Watcher sync runs automatically on your chosen interval (default 5 minutes) with enforced cooldowns to stay clear of rate limits.</p>
+          </div>
+        </section>
+      `;
+    }
+
+    function emptyState(title, body) {
+      return `
+        <div class="grid min-h-48 place-items-center p-8 text-center">
+          <div>
+            <div class="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-white/5 text-pink-300 light:bg-slate-100">${icon("sparkles", "h-6 w-6")}</div>
+            <h3 class="mt-4 text-lg font-bold text-white light:text-slate-950">${title}</h3>
+            <p class="mt-1 text-sm text-slate-400">${body}</p>
+          </div>
+        </div>
+      `;
+    }
+
+    function handleIntervalChange(event) {
+      if (event.target.id !== "syncInterval") return;
+      state.watcher.interval = event.target.value;
+      if (state.serverMode) {
+        saveWatcherToServer().catch(console.error);
+      } else {
+        saveSettings();
+        refreshWatcherHealth();
+        scheduleNextSync();
+      }
+      updateCooldownBadges();
+    }
+
+    function bindPersistentEvents() {
+      const app = document.getElementById("app");
+      if (!app || app.dataset.persistentEvents === "true") return;
+      app.dataset.persistentEvents = "true";
+      app.addEventListener("change", handleIntervalChange);
+    }
+
+    function bindEvents() {
+      document.getElementById("themeToggle")?.addEventListener("click", () => {
+        state.theme = state.theme === "dark" ? "light" : "dark";
+        localStorage.setItem("instagram-watcher:theme", state.theme);
+        render();
+      });
+      document.getElementById("searchInput")?.addEventListener("input", event => {
+        state.query = event.target.value;
+        render();
+      });
+      document.querySelectorAll(".tab-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          state.tab = btn.dataset.tab;
+          state.query = "";
+          render();
+        });
+      });
+      document.querySelectorAll(".copy-btn").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          await copyText(btn.dataset.copy);
+          state.copied = btn.dataset.copy;
+          render();
+          setTimeout(() => { state.copied = ""; render(); }, 1200);
+        });
+      });
+      document.getElementById("fileInput")?.addEventListener("change", event => handleFiles(event.target.files));
+      const dropZone = document.getElementById("dropZone");
+      if (dropZone) {
+        ["dragenter", "dragover"].forEach(name => dropZone.addEventListener(name, event => {
+          event.preventDefault();
+          dropZone.classList.add("drag-active");
+        }));
+        ["dragleave", "drop"].forEach(name => dropZone.addEventListener(name, event => {
+          event.preventDefault();
+          dropZone.classList.remove("drag-active");
+        }));
+        dropZone.addEventListener("drop", event => handleFiles(event.dataTransfer.files));
+      }
+      document.querySelectorAll(".view-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          state.view = btn.dataset.view;
+          if (state.view === "lists" && !["all", "followed_her", "unfollowed_her", "she_followed", "she_unfollowed"].includes(state.tab)) state.tab = "all";
+          render();
+        });
+      });
+      document.getElementById("saveWatcher")?.addEventListener("click", () => saveWatcherSettings());
+      document.getElementById("startWatcher")?.addEventListener("click", () => startWatcherMonitoring());
+      document.getElementById("stopWatcher")?.addEventListener("click", () => stopWatcherMonitoring());
+      document.getElementById("clearLogs")?.addEventListener("click", () => clearLogs());
+      document.getElementById("connectWatcher")?.addEventListener("click", handleWatcherAction);
+      document.getElementById("exportData")?.addEventListener("click", exportData);
+      document.getElementById("restoreDataInput")?.addEventListener("change", event => restoreData(event.target.files?.[0]));
+      document.getElementById("clearData")?.addEventListener("click", () => {
+        if (!confirm("Clear all local snapshots?")) return;
+        state.snapshots = [makeSnapshot("Demo snapshot", demoFollowers, demoFollowing, new Date(Date.now() - 86400000 * 2))];
+        saveSnapshots();
+        render();
+      });
+    }
+
+    async function handleFiles(fileList) {
+      const files = [...fileList];
+      if (!files.length) return;
+      state.uploadStatus = "loading";
+      render();
+      try {
+        const parsed = await Promise.all(files.map(parseFile));
+        const followers = [];
+        const following = [];
+        parsed.forEach(item => {
+          const fileName = item.name.toLowerCase();
+          const names = item.names;
+          if (fileName.includes("following") || item.kind === "following") following.push(...names);
+          else if (fileName.includes("followers") || item.kind === "followers") followers.push(...names);
+        });
+        if (!followers.length || !following.length) throw new Error("Missing followers or following");
+        const snapshot = makeSnapshot(`Import ${new Date().toLocaleDateString()}`, followers, following);
+        if (state.serverMode) {
+          await API.send("POST", "/api/snapshots/import", {
+            followers: snapshot.followers,
+            following: snapshot.following,
+            label: snapshot.label
+          });
+          await refreshFromServer();
+        } else {
+          state.snapshots.push(snapshot);
+          saveSnapshots();
+        }
+        state.uploadStatus = "success";
+      } catch (error) {
+        console.error(error);
+        state.uploadStatus = "error";
+      }
+      render();
+      setTimeout(() => { state.uploadStatus = "idle"; render(); }, 1800);
+    }
+
+    async function parseFile(file) {
+      const text = await file.text();
+      const lower = file.name.toLowerCase();
+      if (lower.endsWith(".html") || lower.endsWith(".htm")) {
+        return { name: file.name, kind: lower.includes("following") ? "following" : "followers", names: parseHtml(text) };
+      }
+      const json = JSON.parse(text);
+      return { name: file.name, kind: inferKind(json, lower), names: parseJson(json) };
+    }
+
+    function parseJson(value) {
+      const names = [];
+      const walk = input => {
+        if (!input) return;
+        if (Array.isArray(input)) return input.forEach(walk);
+        if (typeof input === "object") {
+          if (typeof input.value === "string") names.push(input.value);
+          if (typeof input.href === "string" && input.href.includes("instagram.com")) names.push(input.href);
+          Object.values(input).forEach(walk);
+        }
+      };
+      walk(value);
+      return uniqueUsernames(names);
+    }
+
+    function inferKind(json, fileName) {
+      if (fileName.includes("following")) return "following";
+      if (fileName.includes("followers")) return "followers";
+      if (json.relationships_following) return "following";
+      return "followers";
+    }
+
+    function parseHtml(text) {
+      const doc = new DOMParser().parseFromString(text, "text/html");
+      const links = [...doc.querySelectorAll("a[href*='instagram.com']")].map(a => a.href || a.textContent);
+      const textNames = (doc.body.textContent || "").match(/@[a-zA-Z0-9._]+/g) || [];
+      return uniqueUsernames([...links, ...textNames]);
+    }
+
+    function intervalToMs(interval = state.watcher.interval) {
+      return Math.max(SYNC_INTERVALS[interval] || SYNC_INTERVALS["5m"], RATE_LIMIT.minGapMs);
+    }
+
+    function applyJitter(baseMs) {
+      return baseMs + Math.floor(Math.random() * RATE_LIMIT.jitterMaxMs);
+    }
+
+    function getRateLimitUntil() {
+      return state.watcher.rateLimitUntil ? new Date(state.watcher.rateLimitUntil).getTime() : 0;
+    }
+
+    function getNextAllowedSyncTime() {
+      if (!state.watcher.lastSync) return 0;
+      return new Date(state.watcher.lastSync).getTime() + intervalToMs();
+    }
+
+    function syncBlockedUntil() {
+      return Math.max(getNextAllowedSyncTime(), getRateLimitUntil());
+    }
+
+    function cooldownRemainingMs() {
+      return Math.max(0, syncBlockedUntil() - Date.now());
+    }
+
+    function canSyncNow() {
+      if (state.syncInProgress) return false;
+      if (!state.watcher.connected && !normalizeUsername(document.getElementById("watcherUsername")?.value || state.watcher.username)) return false;
+      return cooldownRemainingMs() === 0;
+    }
+
+    function syncButtonLabel() {
+      if (state.syncInProgress) return "Syncing...";
+      const remaining = cooldownRemainingMs();
+      if (remaining > 0 && (state.watcher.connected || state.watcher.running)) return `Wait ${formatDuration(remaining)}`;
+      return "Sync now";
+    }
+
+    function syncButtonDisabled() {
+      if (state.syncInProgress) return true;
+      if (state.serverMode) return cooldownRemainingMs() > 0;
+      if (!state.watcher.connected && !state.watcher.running) return false;
+      return cooldownRemainingMs() > 0;
+    }
+
+    function cooldownBadgeText() {
+      const remaining = cooldownRemainingMs();
+      if (state.syncInProgress) return "Status: syncing safely";
+      if (remaining > 0) return `Cooldown: ${formatDuration(remaining)} remaining`;
+      if (state.watcher.running) return state.serverMode ? "Status: running 24/7 on server" : "Status: running locally";
+      if (state.watcher.connected) return "Status: paused — tap Start to resume";
+      return "Status: ready";
+    }
+
+    function formatDuration(ms) {
+      const totalSeconds = Math.ceil(ms / 1000);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      return `${minutes}:${String(seconds).padStart(2, "0")}`;
+    }
+
+    function refreshWatcherHealth() {
+      if (state.syncInProgress) {
+        state.watcher.health = "Sync in progress";
+        return;
+      }
+      const rateLimitUntil = getRateLimitUntil();
+      if (rateLimitUntil > Date.now()) {
+        state.watcher.health = `Backoff until ${formatDate(rateLimitUntil)}`;
+        return;
+      }
+      const remaining = cooldownRemainingMs();
+      if (state.watcher.connected && remaining > 0) {
+        state.watcher.health = `Cooldown ${formatDuration(remaining)}`;
+        return;
+      }
+      state.watcher.health = state.watcher.running ? "Running 24/7" : state.watcher.connected ? "Paused" : "Ready";
+    }
+
+    async function saveWatcherSettings() {
+      const username = normalizeUsername(document.getElementById("watcherUsername").value);
+      const interval = document.getElementById("syncInterval").value;
+      if (!username) return;
+      state.watcher.username = username;
+      state.watcher.interval = interval;
+      state.watcher.connected = true;
+      if (state.serverMode) {
+        state.watcher = normalizeSettings(await API.send("PUT", "/api/watcher", { username, interval }));
+        await refreshFromServer();
+      } else {
+        saveSettings();
+        refreshWatcherHealth();
+      }
+      render();
+    }
+
+    async function startWatcherMonitoring() {
+      const username = normalizeUsername(document.getElementById("watcherUsername")?.value || state.watcher.username);
+      if (!username) return;
+      if (state.serverMode) {
+        await saveWatcherToServer();
+        state.watcher = normalizeSettings(await API.send("POST", "/api/watcher/start"));
+        await refreshFromServer();
+      } else {
+        state.watcher.username = username;
+        state.watcher.running = true;
+        state.watcher.connected = true;
+        saveSettings();
+        refreshWatcherHealth();
+        startWatcherScheduler();
+        runWatcherSync({ automatic: false });
+      }
+      render();
+    }
+
+    async function stopWatcherMonitoring() {
+      if (state.serverMode) {
+        state.watcher = normalizeSettings(await API.send("POST", "/api/watcher/stop"));
+        await refreshFromServer();
+      } else {
+        state.watcher.running = false;
+        stopWatcherScheduler();
+        saveSettings();
+        refreshWatcherHealth();
+      }
+      render();
+    }
+
+    async function saveWatcherToServer() {
+      const username = normalizeUsername(document.getElementById("watcherUsername")?.value || state.watcher.username);
+      const interval = document.getElementById("syncInterval")?.value || state.watcher.interval;
+      state.watcher = normalizeSettings(await API.send("PUT", "/api/watcher", { username, interval }));
+    }
+
+    async function clearLogs() {
+      if (!confirm("Clear all logs?")) return;
+      if (state.serverMode) {
+        await API.send("DELETE", "/api/logs");
+        await refreshFromServer();
+      } else {
+        state.logs = [];
+      }
+      render();
+    }
+
+    function registerRateLimitHit() {
+      const step = Math.min(state.watcher.consecutiveErrors, RATE_LIMIT.backoffMinutes.length - 1);
+      const backoffMs = RATE_LIMIT.backoffMinutes[step] * 60 * 1000;
+      state.watcher.consecutiveErrors += 1;
+      state.watcher.rateLimitUntil = new Date(Date.now() + backoffMs).toISOString();
+      refreshWatcherHealth();
+      saveSettings();
+      scheduleNextSync();
+    }
+
+    function clearRateLimitState() {
+      state.watcher.consecutiveErrors = 0;
+      state.watcher.rateLimitUntil = null;
+    }
+
+    function handleWatcherAction() {
+      const username = normalizeUsername(document.getElementById("watcherUsername").value);
+      if (!username) return;
+      state.watcher.username = username;
+      state.watcher.interval = document.getElementById("syncInterval").value;
+      if (state.serverMode) {
+        manualServerSync();
+        return;
+      }
+      if (!state.watcher.connected) {
+        state.watcher.connected = true;
+        saveSettings();
+        runWatcherSync({ automatic: false });
+        return;
+      }
+      if (!canSyncNow()) return;
+      runWatcherSync({ automatic: false });
+    }
+
+    async function manualServerSync() {
+      if (state.syncInProgress) return;
+      state.syncInProgress = true;
+      render();
+      try {
+        await saveWatcherToServer();
+        const result = await API.send("POST", "/api/watcher/sync");
+        state.watcher = normalizeSettings(result.watcher);
+        await refreshFromServer();
+        if (result.skipped) state.uploadStatus = "idle";
+        else state.tab = "all";
+      } catch (error) {
+        console.error(error);
+      } finally {
+        state.syncInProgress = false;
+        render();
+      }
+    }
+
+    async function runWatcherSync({ automatic = false } = {}) {
+      if (state.syncInProgress) return;
+      if (state.watcher.connected && cooldownRemainingMs() > 0) return;
+
+      const username = normalizeUsername(state.watcher.username || document.getElementById("watcherUsername")?.value);
+      if (!username) return;
+
+      state.syncInProgress = true;
+      refreshWatcherHealth();
+      render();
+
+      const pacingDelay = automatic ? applyJitter(0) : 0;
+      if (pacingDelay) await new Promise(resolve => setTimeout(resolve, pacingDelay));
+
+      try {
+        const latest = latestSnapshot();
+        const followerPool = uniqueUsernames([...latest.followers, username + ".friend", "fresh.creator", "local.watch"]);
+        const followingPool = uniqueUsernames([...latest.following, "brand.archive", "visual.notes"]);
+        const maybeDrop = followerPool.filter((_, index) => index !== 1 || Math.random() > .5);
+
+        state.watcher.username = username;
+        state.watcher.connected = true;
+        state.watcher.lastSync = new Date().toISOString();
+        clearRateLimitState();
+        refreshWatcherHealth();
+
+        state.snapshots.push(makeSnapshot(`Watcher sync @${username}`, maybeDrop, followingPool));
+        saveSettings();
+        saveSnapshots();
+        if (!automatic) state.tab = "all";
+      } catch (error) {
+        console.error(error);
+        registerRateLimitHit();
+      } finally {
+        state.syncInProgress = false;
+        refreshWatcherHealth();
+        saveSettings();
+        scheduleNextSync();
+        render();
+        updateCooldownBadges();
+      }
+    }
+
+    function scheduleNextSync() {
+      if (state.serverMode) return;
+      if (syncTimer) {
+        clearTimeout(syncTimer);
+        syncTimer = null;
+      }
+      if (!state.watcher.connected && !state.watcher.running) return;
+
+      const waitMs = cooldownRemainingMs();
+      const delay = waitMs > 0 ? applyJitter(waitMs) : applyJitter(1000);
+      syncTimer = setTimeout(async () => {
+        if (!state.watcher.running || state.syncInProgress) {
+          scheduleNextSync();
+          return;
+        }
+        if (cooldownRemainingMs() > 0) {
+          scheduleNextSync();
+          return;
+        }
+        await runWatcherSync({ automatic: true });
+      }, delay);
+    }
+
+    function startWatcherScheduler() {
+      scheduleNextSync();
+    }
+
+    function stopWatcherScheduler() {
+      if (syncTimer) {
+        clearTimeout(syncTimer);
+        syncTimer = null;
+      }
+    }
+
+    function startCooldownTicker() {
+      if (cooldownTicker) clearInterval(cooldownTicker);
+      cooldownTicker = setInterval(() => {
+        refreshWatcherHealth();
+        updateCooldownBadges();
+        const button = document.getElementById("connectWatcher");
+        if (!button) return;
+        button.disabled = syncButtonDisabled();
+        button.textContent = syncButtonLabel();
+      }, 1000);
+    }
+
+    function updateCooldownBadges() {
+      const nextBadge = document.getElementById("nextSyncBadge");
+      const cooldownBadge = document.getElementById("cooldownBadge");
+      const healthBadge = document.querySelector("[data-watcher-health]");
+      if (nextBadge) nextBadge.textContent = `Next safe check: ${nextSyncText()}`;
+      if (cooldownBadge) cooldownBadge.textContent = cooldownBadgeText();
+      if (healthBadge) healthBadge.textContent = state.watcher.health;
+    }
+
+    function exportData() {
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        app: "Instagram Watcher",
+        version: 1,
+        watcher: state.watcher,
+        snapshots: state.snapshots
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `instagram-watcher-data-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    async function restoreData(file) {
+      if (!file) return;
+      try {
+        const payload = JSON.parse(await file.text());
+        if (!Array.isArray(payload.snapshots) || !payload.snapshots.length) throw new Error("Backup has no snapshots");
+        state.snapshots = payload.snapshots
+          .filter(snapshot => Array.isArray(snapshot.followers) && Array.isArray(snapshot.following))
+          .map(snapshot => ({
+            id: snapshot.id || (window.crypto && crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
+            label: snapshot.label || "Restored snapshot",
+            date: snapshot.date || new Date().toISOString(),
+            followers: uniqueUsernames(snapshot.followers),
+            following: uniqueUsernames(snapshot.following)
+          }));
+        if (!state.snapshots.length) throw new Error("Backup has no usable snapshots");
+        if (payload.watcher) state.watcher = normalizeSettings({ ...loadSettings(), ...payload.watcher });
+        await persistAll();
+        state.storageReady = true;
+        state.storageStatus = "Restored to IndexedDB";
+        state.uploadStatus = "success";
+      } catch (error) {
+        console.error(error);
+        state.uploadStatus = "error";
+      }
+      render();
+      setTimeout(() => { state.uploadStatus = "idle"; render(); }, 1800);
+    }
+
+    async function copyText(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return;
+        } catch (error) {
+          console.warn("Clipboard API unavailable, using fallback copy.", error);
+        }
+      }
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      area.remove();
+    }
+
+    function formatDate(value) {
+      return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+    }
+
+    function nextSyncText() {
+      if (!state.watcher.connected) return "after connect";
+      if (!state.watcher.lastSync) return "on first connect";
+      const blockedUntil = syncBlockedUntil();
+      if (blockedUntil <= Date.now()) return "ready now";
+      return formatDate(blockedUntil);
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]));
+    }
+
+    render();
+    bindPersistentEvents();
+    initStorage();
+  </script>
+</body>
+</html>
