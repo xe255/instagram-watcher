@@ -543,6 +543,7 @@
                 ${state.view === "watcher" ? watcherPanel() : ""}
                 ${state.view === "import" ? `${uploadPanel()}${instructionsPanel()}` : ""}
                 ${state.view === "lists" ? audiencePanel(data, changes, tabs) : ""}
+                ${state.view === "audience" ? audienceListsPanel(data) : ""}
                 ${state.view === "logs" ? logsPanel() : ""}
                 ${state.view === "settings" ? `${storagePanel()}${instructionsPanel()}` : ""}
               </div>
@@ -578,8 +579,9 @@
               ${[
                 ["dashboard", "Dashboard", "layout-dashboard"],
                 ["watcher", "Watcher Sync", "radar"],
-                ["import", "Import", "upload-cloud"],
+                ["audience", "Audience Lists", "users"],
                 ["lists", "History", "clock-3"],
+                ["import", "Import", "upload-cloud"],
                 ["settings", "Storage", "database"]
               ].map(([id, label, navIcon]) => `
                 <button type="button" data-view="${id}" class="view-btn flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${state.view === id ? "bg-white/10 text-white light:bg-slate-100 light:text-slate-950" : "text-slate-400 hover:bg-white/5 hover:text-white light:hover:bg-slate-100 light:hover:text-slate-950"}">
@@ -621,22 +623,22 @@
 
     function stats(data) {
       const cards = [
-        ["Total Followers", data.followers.length, "trending-up", "+ synced", "bg-emerald-500/15 text-emerald-300"],
-        ["Total Following", data.following.length, "user-round-plus", "tracked", "bg-sky-500/15 text-sky-300"],
-        ["Not Following Me Back", data.unfollowers.length, "user-minus", "review", "bg-pink-500/15 text-pink-300"],
-        ["I Don't Follow Back", data.fans.length, "sparkles", "fans", "bg-violet-500/15 text-violet-300"]
+        ["Total Followers", data.followers.length, "trending-up", "+ synced", "bg-emerald-500/15 text-emerald-300", "followers"],
+        ["Total Following", data.following.length, "user-round-plus", "tracked", "bg-sky-500/15 text-sky-300", "following"],
+        ["Not Following Me Back", data.unfollowers.length, "user-minus", "review", "bg-pink-500/15 text-pink-300", "unfollowers"],
+        ["I Don't Follow Back", data.fans.length, "sparkles", "fans", "bg-violet-500/15 text-violet-300", "fans"]
       ];
       return `
         <section class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          ${cards.map(([label, value, cardIcon, meta, toneClass]) => `
-            <article class="surface group rounded-[26px] p-5 transition duration-200 hover:-translate-y-1 hover:shadow-glow">
+          ${cards.map(([label, value, cardIcon, meta, toneClass, tabId]) => `
+            <button type="button" data-goto-view="audience" data-goto-tab="${tabId}" class="surface group text-left w-full rounded-[26px] p-5 transition duration-200 hover:-translate-y-1 hover:shadow-glow cursor-pointer">
               <div class="flex items-center justify-between">
                 <div class="grid h-12 w-12 place-items-center rounded-2xl ${toneClass}">${icon(cardIcon, "h-5 w-5")}</div>
                 <span class="rounded-full bg-emerald-400/10 px-2.5 py-1 text-xs font-bold text-emerald-300">${meta}</span>
               </div>
               <p class="mt-5 text-sm text-slate-400">${label}</p>
               <p class="mt-1 text-3xl font-extrabold text-white light:text-slate-950">${value.toLocaleString()}</p>
-            </article>
+            </button>
           `).join("")}
         </section>
       `;
@@ -665,6 +667,88 @@
           </div>
           ${listContent(data, changes)}
         </section>
+      `;
+    }
+
+    function audienceListsPanel(data) {
+      const tabs = [
+        ["followers", "Followers", data.followers.length, "users"],
+        ["unfollowers", "Not Following Back", data.unfollowers.length, "user-minus"],
+        ["fans", "Fans (Not Followed)", data.fans.length, "sparkles"],
+        ["mutuals", "Mutuals", data.mutuals.length, "handshake"],
+        ["following", "Following", data.following.length, "user-round-plus"]
+      ];
+
+      return `
+        <section class="surface rounded-[24px] p-4 sm:rounded-[28px] sm:p-5">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p class="text-sm font-semibold uppercase tracking-[.22em] text-pink-300">Audience Lists</p>
+              <h2 class="mt-1 text-xl font-bold text-white light:text-slate-950 sm:text-2xl">Current lists for ${escapeHtml(watchedLabel())}</h2>
+            </div>
+            <label class="relative block w-full lg:max-w-xs">
+              ${icon("search", "pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400")}
+              <input id="searchInput" value="${escapeHtml(state.query)}" placeholder="Search username" class="w-full rounded-2xl border border-white/10 bg-white/5 py-3 pl-10 pr-4 text-sm outline-none transition focus:border-pink-400 light:border-slate-200 light:bg-slate-50 light:text-slate-950" />
+            </label>
+          </div>
+          <div class="mt-4 flex gap-2 overflow-x-auto pb-1 sm:mt-5">
+            ${tabs.map(([id, label, count, tabIcon]) => `
+              <button data-tab="${id}" class="tab-btn touch-target flex shrink-0 items-center gap-2 rounded-2xl px-3 py-2.5 text-sm font-semibold transition sm:px-4 ${state.tab === id ? "tab-active" : "bg-white/5 text-slate-300 hover:bg-white/10 light:bg-slate-100 light:text-slate-700"}">
+                ${icon(tabIcon, "h-4 w-4")} ${label}
+                <span class="rounded-full bg-black/20 px-2 py-0.5 text-xs">${count}</span>
+              </button>
+            `).join("")}
+          </div>
+          ${audienceListContent(data)}
+        </section>
+      `;
+    }
+
+    function audienceListContent(data) {
+      let list = [];
+      if (state.tab === "followers") list = data.followers;
+      else if (state.tab === "unfollowers") list = data.unfollowers;
+      else if (state.tab === "fans") list = data.fans;
+      else if (state.tab === "mutuals") list = data.mutuals;
+      else if (state.tab === "following") list = data.following;
+
+      const filtered = list.filter(user => {
+        if (!state.query) return true;
+        return user.toLowerCase().includes(state.query.toLowerCase());
+      });
+
+      return activeList(filtered);
+    }
+
+    function activeList(users) {
+      const tabTones = {
+        followers: { bg: "bg-emerald-400/10 text-emerald-300", icon: "users" },
+        unfollowers: { bg: "bg-rose-400/10 text-rose-300", icon: "user-minus" },
+        fans: { bg: "bg-violet-400/10 text-violet-300", icon: "sparkles" },
+        mutuals: { bg: "bg-sky-400/10 text-sky-300", icon: "handshake" },
+        following: { bg: "bg-slate-400/10 text-slate-300", icon: "user-round-plus" }
+      };
+      const tone = tabTones[state.tab] || { bg: "bg-white/5 text-white", icon: "user" };
+
+      return `
+        <div class="mt-5 overflow-hidden rounded-3xl border border-white/10 light:border-slate-200">
+          ${users.length ? users.map(user => `
+            <div class="premium-row flex items-center justify-between border-b border-white/10 p-4 last:border-b-0 light:border-slate-200">
+              <div class="flex min-w-0 items-center gap-3">
+                <div class="grid h-11 w-11 shrink-0 place-items-center rounded-full ${tone.bg}">${icon(tone.icon, "h-5 w-5")}</div>
+                <div class="min-w-0">
+                  <p class="text-sm font-bold text-white light:text-slate-950">@${escapeHtml(user)}</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 sm:shrink-0">
+                <button data-copy="${escapeHtml(user)}" class="copy-btn grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/5 text-slate-300 transition hover:border-pink-400 hover:text-white light:border-slate-200 light:bg-slate-50 light:text-slate-700" title="Copy username">
+                  ${state.copied === user ? icon("check", "h-4 w-4 text-emerald-300") : icon("copy", "h-4 w-4")}
+                </button>
+                <a href="https://instagram.com/${encodeURIComponent(user)}" target="_blank" rel="noreferrer" class="grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/5 text-slate-300 transition hover:border-pink-400 hover:text-white light:border-slate-200 light:bg-slate-50 light:text-slate-700" title="Open profile">${icon("external-link", "h-4 w-4")}</a>
+              </div>
+            </div>
+          `).join("") : emptyState("No users in this list", "No accounts matched the criteria or search query.")}
+        </div>
       `;
     }
 
@@ -702,9 +786,9 @@
     function mobileNav() {
       const items = [
         ["dashboard", "Home", "layout-dashboard"],
-        ["lists", "Activity", "activity"],
-        ["logs", "Logs", "scroll-text"],
-        ["settings", "Data", "database"]
+        ["audience", "Audience", "users"],
+        ["lists", "History", "activity"],
+        ["logs", "Logs", "scroll-text"]
       ];
       return `
         <nav class="mobile-nav surface border-t border-white/10 light:border-slate-200">
@@ -890,11 +974,18 @@
         <section class="surface rounded-[28px] p-5">
           <div class="flex items-center gap-3">
             <div class="grid h-11 w-11 place-items-center rounded-2xl bg-white/5 text-violet-300 light:bg-slate-100">${icon("info", "h-5 w-5")}</div>
-            <h3 class="text-xl font-bold text-white light:text-slate-950">How imports work</h3>
+            <h3 class="text-xl font-bold text-white light:text-slate-950">24/7 Autopilot Setup</h3>
           </div>
           <div class="mt-4 space-y-3 text-sm leading-6 text-slate-400 light:text-slate-600">
-            <p>Use Instagram's data download and import followers/following JSON or HTML files. The app extracts usernames in your browser and saves a dated snapshot locally.</p>
-            <p>Two snapshots unlock the recent changes timeline. Watcher sync runs automatically on your chosen interval (default 5 minutes) with enforced cooldowns to stay clear of rate limits.</p>
+            <p>💡 <strong>Running on Server vs. Browser:</strong></p>
+            <ul class="list-disc pl-4 space-y-1">
+              <li><strong>Server mode:</strong> It runs automatically in the background. Once you click "Start 24/7", you can close this tab and it will continue checking.</li>
+              <li><strong>Browser-only mode:</strong> If you open the file directly without starting the server, checks only run while this tab is open.</li>
+            </ul>
+            <p>☁️ <strong>Free Always-On Hosting (No Credit Card):</strong></p>
+            <p>Deploy to <strong>Belmo.io</strong> (recommended) or <strong>JustRunMy.App</strong> for true always-on hosting. If deploying to <strong>Render</strong>, remember that free tiers sleep and erase local databases. Configure the <code>GIST_ID</code> and <code>GITHUB_TOKEN</code> environment variables to save settings permanently, and use <strong>cron-job.org</strong> to keep it awake.</p>
+            <p>🔑 <strong>Instagram Cookie Lifetime:</strong></p>
+            <p>Instagram session cookies expire occasionally. When this happens, the watcher will pause in <em>Backoff</em> mode. You must update your <code>sessionid</code> cookie to resume real tracking. Leave Session ID blank to run in <strong>Simulated Demo Mode</strong> indefinitely on 100% autopilot.</p>
           </div>
         </section>
       `;
@@ -930,6 +1021,9 @@
       if (view === "lists" && !["all", "followed_her", "unfollowed_her", "she_followed", "she_unfollowed"].includes(state.tab)) {
         state.tab = "all";
       }
+      if (view === "audience" && !["followers", "unfollowers", "fans", "mutuals", "following"].includes(state.tab)) {
+        state.tab = "followers";
+      }
       render();
     }
 
@@ -940,8 +1034,19 @@
       app.addEventListener("change", handleIntervalChange);
       app.addEventListener("click", event => {
         const viewBtn = event.target.closest(".view-btn");
-        if (!viewBtn?.dataset.view) return;
-        setView(viewBtn.dataset.view);
+        if (viewBtn?.dataset.view) {
+          setView(viewBtn.dataset.view);
+          return;
+        }
+
+        const gotoCard = event.target.closest("[data-goto-view]");
+        if (gotoCard?.dataset.gotoView) {
+          state.view = gotoCard.dataset.gotoView;
+          state.tab = gotoCard.dataset.gotoTab;
+          state.query = "";
+          render();
+          return;
+        }
       });
     }
 
