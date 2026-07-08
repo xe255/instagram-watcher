@@ -174,7 +174,7 @@
 
     const RATE_LIMIT = {
       minGapMs: SYNC_INTERVALS["5m"],
-      jitterMaxMs: 30 * 1000,
+      jitterMaxMs: 5 * 1000,
       backoffMinutes: [5, 15, 30, 60, 120]
     };
 
@@ -375,9 +375,19 @@
       const tick = async () => {
         try {
           const oldSnapshotsCount = state.snapshots.length;
+          const oldHealth = state.watcher.health;
+          const oldRunning = state.watcher.running;
+          const oldSync = state.syncInProgress;
+          
           await refreshFromServer();
           refreshWatcherHealth();
-          if (state.snapshots.length !== oldSnapshotsCount) {
+          
+          const stateChanged = state.snapshots.length !== oldSnapshotsCount ||
+                               state.watcher.health !== oldHealth ||
+                               state.watcher.running !== oldRunning ||
+                               state.syncInProgress !== oldSync;
+          
+          if (stateChanged) {
             render();
           } else if (state.view === "logs" || state.tab === "logs") {
             updateLogsOnly();
@@ -576,7 +586,7 @@
     function sidebar() {
       return `
         <aside class="sticky top-0 z-20 flex items-center justify-between border-b border-white/10 bg-ink/80 px-4 py-3 backdrop-blur-xl light:bg-white/85 lg:h-screen lg:w-72 lg:flex-col lg:items-stretch lg:border-b-0 lg:border-r lg:px-5 lg:py-6">
-          <div>
+          <div class="flex w-full items-center justify-between lg:block">
             <div class="flex items-center gap-3">
               <div class="ig-ring grid h-12 w-12 place-items-center rounded-2xl p-[2px] shadow-glow">
                 <div class="grid h-full w-full place-items-center rounded-[14px] bg-ink text-white">${icon("instagram", "h-6 w-6")}</div>
@@ -586,23 +596,56 @@
                 <p class="text-xs text-slate-400">Private follower intelligence</p>
               </div>
             </div>
-            <nav class="mt-8 hidden space-y-2 lg:block">
-              ${[
-                ["dashboard", "Dashboard", "layout-dashboard"],
-                ["watcher", "Watcher Sync", "radar"],
-                ["audience", "Audience Lists", "users"],
-                ["lists", "Live Feed", "activity"],
-                ["logs", "Server Logs", "scroll-text"],
-                ["import", "Import", "upload-cloud"],
-                ["settings", "Storage", "database"]
-              ].map(([id, label, navIcon]) => `
-                <button type="button" data-view="${id}" class="view-btn flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${state.view === id ? "bg-white/10 text-white light:bg-slate-100 light:text-slate-950" : "text-slate-400 hover:bg-white/5 hover:text-white light:hover:bg-slate-100 light:hover:text-slate-950"}">
-                  ${icon(navIcon, "h-4 w-4")} ${label}
-                </button>
-              `).join("")}
-            </nav>
+            
+            <!-- Mobile Toggle Actions -->
+            <div class="flex items-center gap-2 lg:hidden">
+              <button id="themeToggleMobile" class="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/5 text-slate-200 transition hover:border-pink-400 hover:text-white light:border-slate-200 light:bg-slate-50 light:text-slate-700">
+                ${icon(state.theme === "dark" ? "sun" : "moon", "h-4 w-4.5")}
+              </button>
+              <button id="menuToggle" class="grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-white/5 text-slate-200 transition hover:border-pink-400 hover:text-white light:border-slate-200 light:bg-slate-50 light:text-slate-700">
+                ${icon(state.mobileMenuOpen ? "x" : "menu", "h-5 w-5")}
+              </button>
+            </div>
           </div>
-          <button id="themeToggle" class="grid h-11 w-11 place-items-center rounded-2xl border border-white/10 bg-white/5 text-slate-200 transition hover:border-pink-400 hover:text-white light:border-slate-200 light:bg-slate-50 light:text-slate-700">
+          
+          <nav class="mt-8 hidden space-y-2 lg:block">
+            ${[
+              ["dashboard", "Dashboard", "layout-dashboard"],
+              ["watcher", "Watcher Sync", "radar"],
+              ["audience", "Audience Lists", "users"],
+              ["lists", "Live Feed", "activity"],
+              ["logs", "Server Logs", "scroll-text"],
+              ["import", "Import", "upload-cloud"],
+              ["settings", "Storage", "database"]
+            ].map(([id, label, navIcon]) => `
+              <button type="button" data-view="${id}" class="view-btn flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${state.view === id ? "bg-white/10 text-white light:bg-slate-100 light:text-slate-950" : "text-slate-400 hover:bg-white/5 hover:text-white light:hover:bg-slate-100 light:hover:text-slate-950"}">
+                ${icon(navIcon, "h-4 w-4")} ${label}
+              </button>
+            `).join("")}
+          </nav>
+          
+          <!-- Mobile Dropdown Menu -->
+          ${state.mobileMenuOpen ? `
+            <div class="absolute left-0 right-0 top-full z-30 border-b border-white/10 bg-ink/95 px-4 py-4 shadow-2xl backdrop-blur-2xl light:bg-white/95 lg:hidden">
+              <nav class="space-y-1.5">
+                ${[
+                  ["dashboard", "Dashboard", "layout-dashboard"],
+                  ["watcher", "Watcher Sync", "radar"],
+                  ["audience", "Audience Lists", "users"],
+                  ["lists", "Live Feed", "activity"],
+                  ["logs", "Server Logs", "scroll-text"],
+                  ["import", "Import", "upload-cloud"],
+                  ["settings", "Storage", "database"]
+                ].map(([id, label, navIcon]) => `
+                  <button type="button" data-view="${id}" class="view-btn flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${state.view === id ? "bg-white/10 text-white light:bg-slate-100 light:text-slate-950" : "text-slate-400 hover:bg-white/5 hover:text-white light:hover:bg-slate-100 light:hover:text-slate-950"}">
+                    ${icon(navIcon, "h-4 w-4")} ${label}
+                  </button>
+                `).join("")}
+              </nav>
+            </div>
+          ` : ""}
+          
+          <button id="themeToggle" class="hidden lg:grid h-11 w-11 place-items-center rounded-2xl border border-white/10 bg-white/5 text-slate-200 transition hover:border-pink-400 hover:text-white light:border-slate-200 light:bg-slate-50 light:text-slate-700">
             ${icon(state.theme === "dark" ? "sun" : "moon", "h-5 w-5")}
           </button>
         </aside>
@@ -641,15 +684,15 @@
         ["I Don't Follow Back", data.fans.length, "sparkles", "fans", "bg-violet-500/15 text-violet-300", "fans"]
       ];
       return `
-        <section class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section class="mt-5 grid gap-3 grid-cols-2 xl:grid-cols-4">
           ${cards.map(([label, value, cardIcon, meta, toneClass, tabId]) => `
-            <button type="button" data-goto-view="audience" data-goto-tab="${tabId}" class="surface group text-left w-full rounded-[26px] p-5 transition duration-200 hover:-translate-y-1 hover:shadow-glow cursor-pointer">
+            <button type="button" data-goto-view="audience" data-goto-tab="${tabId}" class="surface group text-left w-full rounded-[22px] p-4 sm:p-5 transition duration-200 hover:-translate-y-1 hover:shadow-glow cursor-pointer">
               <div class="flex items-center justify-between">
-                <div class="grid h-12 w-12 place-items-center rounded-2xl ${toneClass}">${icon(cardIcon, "h-5 w-5")}</div>
-                <span class="rounded-full bg-emerald-400/10 px-2.5 py-1 text-xs font-bold text-emerald-300">${meta}</span>
+                <div class="grid h-10 w-10 sm:h-12 sm:w-12 place-items-center rounded-xl sm:rounded-2xl ${toneClass}">${icon(cardIcon, "h-4.5 w-4.5 sm:h-5 sm:w-5")}</div>
+                <span class="rounded-full bg-emerald-400/10 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-xs font-bold text-emerald-300">${meta}</span>
               </div>
-              <p class="mt-5 text-sm text-slate-400">${label}</p>
-              <p class="mt-1 text-3xl font-extrabold text-white light:text-slate-950">${value.toLocaleString()}</p>
+              <p class="mt-4 sm:mt-5 text-xs sm:text-sm text-slate-400">${label}</p>
+              <p class="mt-1 text-xl sm:text-3xl font-extrabold text-white light:text-slate-950">${value.toLocaleString()}</p>
             </button>
           `).join("")}
         </section>
@@ -1037,6 +1080,7 @@
 
     function setView(view) {
       state.view = view;
+      state.mobileMenuOpen = false;
       if (view === "lists" && !["all", "followed_her", "unfollowed_her", "she_followed", "she_unfollowed"].includes(state.tab)) {
         state.tab = "all";
       }
@@ -1063,6 +1107,7 @@
           state.view = gotoCard.dataset.gotoView;
           state.tab = gotoCard.dataset.gotoTab;
           state.query = "";
+          state.mobileMenuOpen = false;
           render();
           return;
         }
@@ -1073,6 +1118,15 @@
       document.getElementById("themeToggle")?.addEventListener("click", () => {
         state.theme = state.theme === "dark" ? "light" : "dark";
         localStorage.setItem("instagram-watcher:theme", state.theme);
+        render();
+      });
+      document.getElementById("themeToggleMobile")?.addEventListener("click", () => {
+        state.theme = state.theme === "dark" ? "light" : "dark";
+        localStorage.setItem("instagram-watcher:theme", state.theme);
+        render();
+      });
+      document.getElementById("menuToggle")?.addEventListener("click", () => {
+        state.mobileMenuOpen = !state.mobileMenuOpen;
         render();
       });
       document.getElementById("searchInput")?.addEventListener("input", event => {
