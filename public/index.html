@@ -592,6 +592,7 @@
                 ["watcher", "Watcher Sync", "radar"],
                 ["audience", "Audience Lists", "users"],
                 ["lists", "Live Feed", "activity"],
+                ["logs", "Server Logs", "scroll-text"],
                 ["import", "Import", "upload-cloud"],
                 ["settings", "Storage", "database"]
               ].map(([id, label, navIcon]) => `
@@ -918,7 +919,7 @@
 
     function historyList(changes) {
       const emptyMessages = {
-        all: ["No follow changes yet", "Sync or import two snapshots to see who followed or unfollowed."],
+        all: ["No follow changes yet", "Sync or import snapshots to see who followed or unfollowed."],
         followed_her: ["No new followers", "Nobody started following her since the last snapshot."],
         unfollowed_her: ["No unfollows", "Nobody unfollowed her since the last snapshot."],
         she_followed: ["She didn't follow anyone new", "She hasn't followed anyone new since the last snapshot."],
@@ -930,20 +931,21 @@
           ${changes.length ? changes.map(change => {
             const meta = CHANGE_TYPES[change.category];
             return `
-            <div class="premium-row flex flex-col gap-3 border-b border-white/10 p-4 last:border-b-0 light:border-slate-200 sm:flex-row sm:items-center sm:justify-between">
+            <div class="premium-row flex items-center justify-between border-b border-white/10 p-3.5 last:border-b-0 light:border-slate-200 gap-3">
               <div class="flex min-w-0 items-center gap-3">
-                <div class="grid h-11 w-11 shrink-0 place-items-center rounded-full ${meta.rowClass}">${icon(meta.icon, "h-5 w-5")}</div>
+                <div class="grid h-10 w-10 shrink-0 place-items-center rounded-full ${meta.rowClass}">${icon(meta.icon, "h-4.5 w-4.5")}</div>
                 <div class="min-w-0">
-                  <p class="text-sm font-bold text-white light:text-slate-950">${escapeHtml(changeDescription(change))}</p>
-                  <p class="text-xs text-slate-400">${formatDate(change.date)}</p>
+                  <p class="text-sm font-bold text-white light:text-slate-950">@${escapeHtml(change.user)}</p>
+                  <p class="text-xs text-slate-400 mt-0.5">
+                    <span class="font-semibold ${meta.rowClass.split(' ')[1]} mr-1">${changeShortLabel(change)}</span> &middot; ${formatDate(change.date)}
+                  </p>
                 </div>
               </div>
-              <div class="flex items-center gap-2 sm:shrink-0">
-                <span class="rounded-full px-3 py-1 text-xs font-bold ${meta.rowClass}">${changeShortLabel(change)}</span>
-                <button data-copy="${escapeHtml(change.user)}" class="copy-btn grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/5 text-slate-300 transition hover:border-pink-400 hover:text-white light:border-slate-200 light:bg-slate-50 light:text-slate-700" title="Copy username">
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button data-copy="${escapeHtml(change.user)}" class="copy-btn grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition hover:border-pink-400 hover:text-white light:border-slate-200 light:bg-slate-50 light:text-slate-700" title="Copy username">
                   ${state.copied === change.user ? icon("check", "h-4 w-4 text-emerald-300") : icon("copy", "h-4 w-4")}
                 </button>
-                <a href="https://instagram.com/${encodeURIComponent(change.user)}" target="_blank" rel="noreferrer" class="grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/5 text-slate-300 transition hover:border-pink-400 hover:text-white light:border-slate-200 light:bg-slate-50 light:text-slate-700" title="Open profile">${icon("external-link", "h-4 w-4")}</a>
+                <a href="https://instagram.com/${encodeURIComponent(change.user)}" target="_blank" rel="noreferrer" class="grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition hover:border-pink-400 hover:text-white light:border-slate-200 light:bg-slate-50 light:text-slate-700" title="Open profile">${icon("external-link", "h-4 w-4")}</a>
               </div>
             </div>
           `;
@@ -1222,23 +1224,18 @@
     }
 
     function canSyncNow() {
-      if (state.syncInProgress) return false;
-      if (!state.watcher.connected && !normalizeUsername(document.getElementById("watcherUsername")?.value || state.watcher.username)) return false;
-      return cooldownRemainingMs() === 0;
+      return !state.syncInProgress;
     }
 
     function syncButtonLabel() {
       if (state.syncInProgress) return "Syncing...";
       const remaining = cooldownRemainingMs();
-      if (remaining > 0 && (state.watcher.connected || state.watcher.running)) return `Wait ${formatDuration(remaining)}`;
+      if (remaining > 0) return "Force Sync Now";
       return "Sync now";
     }
 
     function syncButtonDisabled() {
-      if (state.syncInProgress) return true;
-      if (state.serverMode) return cooldownRemainingMs() > 0;
-      if (!state.watcher.connected && !state.watcher.running) return false;
-      return cooldownRemainingMs() > 0;
+      return state.syncInProgress;
     }
 
     function cooldownBadgeText() {
