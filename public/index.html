@@ -374,10 +374,16 @@
       if (!state.serverMode) return;
       const tick = async () => {
         try {
+          const oldSnapshotsCount = state.snapshots.length;
           await refreshFromServer();
           refreshWatcherHealth();
-          if (state.view === "logs" || state.tab === "logs") updateLogsOnly();
-          else updateCooldownBadges();
+          if (state.snapshots.length !== oldSnapshotsCount) {
+            render();
+          } else if (state.view === "logs" || state.tab === "logs") {
+            updateLogsOnly();
+          } else {
+            updateCooldownBadges();
+          }
         } catch (error) {
           console.warn("Server poll failed", error);
         }
@@ -497,19 +503,24 @@
     }
 
     function recentChanges() {
-      const current = latestSnapshot();
-      const prev = previousSnapshot();
-      if (!current || !prev) return [];
-      const currentFollowers = new Set(current.followers);
-      const previousFollowers = new Set(prev.followers);
-      const currentFollowing = new Set(current.following);
-      const previousFollowing = new Set(prev.following);
-      const changes = [
-        ...prev.followers.filter(user => !currentFollowers.has(user)).map(user => ({ category: "unfollowed_her", user, date: current.date })),
-        ...current.followers.filter(user => !previousFollowers.has(user)).map(user => ({ category: "followed_her", user, date: current.date })),
-        ...prev.following.filter(user => !currentFollowing.has(user)).map(user => ({ category: "she_unfollowed", user, date: current.date })),
-        ...current.following.filter(user => !previousFollowing.has(user)).map(user => ({ category: "she_followed", user, date: current.date }))
-      ];
+      if (state.snapshots.length < 2) return [];
+      const sorted = [...state.snapshots].sort((a, b) => new Date(a.date) - new Date(b.date));
+      const changes = [];
+      for (let i = 1; i < sorted.length; i++) {
+        const prev = sorted[i - 1];
+        const current = sorted[i];
+        const currentFollowers = new Set(current.followers);
+        const previousFollowers = new Set(prev.followers);
+        const currentFollowing = new Set(current.following);
+        const previousFollowing = new Set(prev.following);
+        
+        changes.push(
+          ...prev.followers.filter(user => !currentFollowers.has(user)).map(user => ({ category: "unfollowed_her", user, date: current.date })),
+          ...current.followers.filter(user => !previousFollowers.has(user)).map(user => ({ category: "followed_her", user, date: current.date })),
+          ...prev.following.filter(user => !currentFollowing.has(user)).map(user => ({ category: "she_unfollowed", user, date: current.date })),
+          ...current.following.filter(user => !previousFollowing.has(user)).map(user => ({ category: "she_followed", user, date: current.date }))
+        );
+      }
       return changes.sort((a, b) => new Date(b.date) - new Date(a.date));
     }
 
@@ -580,7 +591,7 @@
                 ["dashboard", "Dashboard", "layout-dashboard"],
                 ["watcher", "Watcher Sync", "radar"],
                 ["audience", "Audience Lists", "users"],
-                ["lists", "History", "clock-3"],
+                ["lists", "Live Feed", "activity"],
                 ["import", "Import", "upload-cloud"],
                 ["settings", "Storage", "database"]
               ].map(([id, label, navIcon]) => `
@@ -649,8 +660,14 @@
         <section class="surface rounded-[24px] p-4 sm:rounded-[28px] sm:p-5">
           <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p class="text-sm font-semibold uppercase tracking-[.22em] text-pink-300">Follow activity</p>
-              <h2 class="mt-1 text-xl font-bold text-white light:text-slate-950 sm:text-2xl">Who followed or unfollowed ${escapeHtml(watchedLabel())}</h2>
+              <div class="flex items-center gap-2">
+                <span class="relative flex h-2 w-2">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <p class="text-sm font-semibold uppercase tracking-[.22em] text-pink-300">Live Follow Feed</p>
+              </div>
+              <h2 class="mt-1 text-xl font-bold text-white light:text-slate-950 sm:text-2xl">Real-time log of follows and unfollows</h2>
             </div>
             <label class="relative block w-full lg:max-w-xs">
               ${icon("search", "pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400")}
@@ -787,7 +804,7 @@
       const items = [
         ["dashboard", "Home", "layout-dashboard"],
         ["audience", "Audience", "users"],
-        ["lists", "History", "activity"],
+        ["lists", "Live Feed", "activity"],
         ["logs", "Logs", "scroll-text"]
       ];
       return `
