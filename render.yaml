@@ -3,14 +3,20 @@ services:
     name: instagram-watcher
     runtime: node
     plan: free
+    region: frankfurt
     buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /api/status
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DATA_DIR
-        value: /var/data
-    disk:
-      name: watcher-data
-      mountPath: /var/data
-      sizeGB: 1
+      - key: FREE_TIER
+        value: "true"
+      - key: USE_EXTERNAL_CRON
+        value: "true"
+      - key: MAX_SNAPSHOTS
+        value: "5"
+      - key: MAX_LOGS
+        value: "50"
+      - key: CRON_SECRET
+        generateValue: true

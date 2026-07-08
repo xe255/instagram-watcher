@@ -192,6 +192,7 @@
       storageStatus: "Local fallback ready",
       serverMode: false,
       serverStatus: "Checking server...",
+      freeTier: false,
       logs: [],
       selectedSnapshot: null,
       syncInProgress: false,
@@ -329,6 +330,7 @@
         state.serverStatus = status.watcher.running ? "Running 24/7 on server" : "Server ready (paused)";
         state.watcher = normalizeSettings(status.watcher);
         state.syncInProgress = Boolean(status.watcher.syncInProgress);
+        state.freeTier = Boolean(status.freeTier);
         startServerPolling();
       } catch {
         state.serverMode = false;
@@ -339,7 +341,7 @@
     async function refreshFromServer() {
       const [snapshots, logs, status] = await Promise.all([
         API.get("/api/snapshots"),
-        API.get("/api/logs?limit=100"),
+        API.get("/api/logs?limit=50"),
         API.get("/api/status")
       ]);
       state.snapshots = snapshots.length ? snapshots : state.snapshots;
@@ -347,13 +349,18 @@
       state.watcher = normalizeSettings(status.watcher);
       state.syncInProgress = Boolean(status.watcher.syncInProgress);
       state.serverStatus = status.watcher.running ? "Running 24/7 on server" : "Server ready (paused)";
+      state.freeTier = Boolean(status.freeTier);
     }
 
     let serverPollTimer = null;
+    function serverPollIntervalMs() {
+      return state.freeTier ? 60_000 : 10_000;
+    }
+
     function startServerPolling() {
       if (serverPollTimer) clearInterval(serverPollTimer);
       if (!state.serverMode) return;
-      serverPollTimer = setInterval(async () => {
+      const tick = async () => {
         try {
           await refreshFromServer();
           refreshWatcherHealth();
@@ -362,7 +369,9 @@
         } catch (error) {
           console.warn("Server poll failed", error);
         }
-      }, 10000);
+      };
+      tick();
+      serverPollTimer = setInterval(tick, serverPollIntervalMs());
     }
 
     function updateLogsOnly() {
@@ -516,17 +525,20 @@
           <main class="main-content flex-1 px-3 py-3 sm:px-6 lg:px-8 lg:py-4">
             ${topbar(snapshot)}
             ${state.view === "dashboard" ? stats(data) : ""}
-            <section class="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px] lg:mt-5 lg:gap-5">
+            <section class="mt-4 grid gap-4 ${state.view === "dashboard" ? "xl:grid-cols-[minmax(0,1fr)_390px]" : ""} lg:mt-5 lg:gap-5">
               <div class="space-y-4 lg:space-y-5">
                 ${state.view === "dashboard" ? `${watcherPanel()}${uploadPanel()}` : ""}
+                ${state.view === "watcher" ? watcherPanel() : ""}
+                ${state.view === "import" ? `${uploadPanel()}${instructionsPanel()}` : ""}
                 ${state.view === "lists" ? audiencePanel(data, changes, tabs) : ""}
                 ${state.view === "logs" ? logsPanel() : ""}
                 ${state.view === "settings" ? `${storagePanel()}${instructionsPanel()}` : ""}
               </div>
+              ${state.view === "dashboard" ? `
               <aside class="hidden space-y-5 xl:block">
                 ${storagePanel()}
                 ${instructionsPanel()}
-              </aside>
+              </aside>` : ""}
             </section>
           </main>
           ${mobileNav()}
@@ -551,10 +563,16 @@
               </div>
             </div>
             <nav class="mt-8 hidden space-y-2 lg:block">
-              ${["Dashboard", "Watcher Sync", "Import", "History", "Storage"].map((item, index) => `
-                <a href="#" class="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold ${index === 0 ? "bg-white/10 text-white light:bg-slate-100 light:text-slate-950" : "text-slate-400 hover:bg-white/5 hover:text-white light:hover:bg-slate-100 light:hover:text-slate-950"}">
-                  ${icon(["layout-dashboard", "radar", "upload-cloud", "clock-3", "database"][index], "h-4 w-4")} ${item}
-                </a>
+              ${[
+                ["dashboard", "Dashboard", "layout-dashboard"],
+                ["watcher", "Watcher Sync", "radar"],
+                ["import", "Import", "upload-cloud"],
+                ["lists", "History", "clock-3"],
+                ["settings", "Storage", "database"]
+              ].map(([id, label, navIcon]) => `
+                <button type="button" data-view="${id}" class="view-btn flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${state.view === id ? "bg-white/10 text-white light:bg-slate-100 light:text-slate-950" : "text-slate-400 hover:bg-white/5 hover:text-white light:hover:bg-slate-100 light:hover:text-slate-950"}">
+                  ${icon(navIcon, "h-4 w-4")} ${label}
+                </button>
               `).join("")}
             </nav>
           </div>
@@ -720,7 +738,7 @@
             <span class="rounded-full bg-white/5 px-3 py-1.5 light:bg-slate-100">Last sync: ${state.watcher.lastSync ? formatDate(state.watcher.lastSync) : "Never"}</span>
             <span id="nextSyncBadge" class="rounded-full bg-white/5 px-3 py-1.5 light:bg-slate-100">Next safe check: ${nextSyncText()}</span>
             <span id="cooldownBadge" class="rounded-full bg-white/5 px-3 py-1.5 light:bg-slate-100">${cooldownBadgeText()}</span>
-            <span class="rounded-full bg-white/5 px-3 py-1.5 light:bg-slate-100">${state.serverMode ? "Server: online" : "Mode: browser only"}</span>
+            <span class="rounded-full bg-white/5 px-3 py-1.5 light:bg-slate-100">${state.serverMode ? (state.freeTier ? "Free tier · low data mode" : "Server: online") : "Mode: browser only"}</span>
           </div>
         </section>
       `;
@@ -873,11 +891,24 @@
       updateCooldownBadges();
     }
 
+    function setView(view) {
+      state.view = view;
+      if (view === "lists" && !["all", "followed_her", "unfollowed_her", "she_followed", "she_unfollowed"].includes(state.tab)) {
+        state.tab = "all";
+      }
+      render();
+    }
+
     function bindPersistentEvents() {
       const app = document.getElementById("app");
       if (!app || app.dataset.persistentEvents === "true") return;
       app.dataset.persistentEvents = "true";
       app.addEventListener("change", handleIntervalChange);
+      app.addEventListener("click", event => {
+        const viewBtn = event.target.closest(".view-btn");
+        if (!viewBtn?.dataset.view) return;
+        setView(viewBtn.dataset.view);
+      });
     }
 
     function bindEvents() {
@@ -918,13 +949,6 @@
         }));
         dropZone.addEventListener("drop", event => handleFiles(event.dataTransfer.files));
       }
-      document.querySelectorAll(".view-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
-          state.view = btn.dataset.view;
-          if (state.view === "lists" && !["all", "followed_her", "unfollowed_her", "she_followed", "she_unfollowed"].includes(state.tab)) state.tab = "all";
-          render();
-        });
-      });
       document.getElementById("saveWatcher")?.addEventListener("click", () => saveWatcherSettings());
       document.getElementById("startWatcher")?.addEventListener("click", () => startWatcherMonitoring());
       document.getElementById("stopWatcher")?.addEventListener("click", () => stopWatcherMonitoring());
