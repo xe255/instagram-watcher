@@ -219,7 +219,10 @@
 
     function defaultSettings() {
       return {
-        username: "",
+        adminUsername: "",
+        adminSessionId: "",
+        targetUsername: "",
+        username: "", // kept for backwards-compatibility checks
         connected: false,
         running: false,
         interval: "5m",
@@ -233,6 +236,9 @@
     function normalizeSettings(settings = {}) {
       const defaults = defaultSettings();
       const merged = { ...defaults, ...settings };
+      if (merged.username && !merged.targetUsername) {
+        merged.targetUsername = merged.username;
+      }
       if (!SYNC_INTERVALS[merged.interval]) merged.interval = "5m";
       merged.consecutiveErrors = Number(merged.consecutiveErrors) || 0;
       merged.rateLimitUntil = merged.rateLimitUntil || null;
@@ -300,7 +306,6 @@
         if (state.serverMode) {
           await refreshFromServer();
           state.storageReady = true;
-          state.storageStatus = "Server storage active";
         } else {
           const [snapshots, settings] = await Promise.all([
             readDatabaseValue("snapshots"),
@@ -331,6 +336,7 @@
         state.watcher = normalizeSettings(status.watcher);
         state.syncInProgress = Boolean(status.watcher.syncInProgress);
         state.freeTier = Boolean(status.freeTier);
+        state.storageType = status.storageType;
         startServerPolling();
       } catch {
         state.serverMode = false;
@@ -350,6 +356,12 @@
       state.syncInProgress = Boolean(status.watcher.syncInProgress);
       state.serverStatus = status.watcher.running ? "Running 24/7 on server" : "Server ready (paused)";
       state.freeTier = Boolean(status.freeTier);
+      state.storageType = status.storageType;
+      if (state.storageType === "gist") {
+        state.storageStatus = "GitHub Gist active (persistent)";
+      } else {
+        state.storageStatus = "Server storage active (ephemeral)";
+      }
     }
 
     let serverPollTimer = null;
@@ -722,15 +734,36 @@
               ${icon(isRunning ? "play-circle" : "pause-circle", "h-4 w-4")} ${state.watcher.health}
             </div>
           </div>
-          <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_120px_120px]">
-            <input id="watcherUsername" value="${escapeHtml(state.watcher.username)}" placeholder="Instagram username" class="touch-target rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base outline-none transition focus:border-pink-400 light:border-slate-200 light:bg-slate-50 light:text-slate-950 sm:text-sm" />
-            <select id="syncInterval" class="touch-target rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none light:border-slate-200 light:bg-slate-50 light:text-slate-950">
-              ${Object.keys(SYNC_INTERVALS).map(v => `<option value="${v}" ${state.watcher.interval === v ? "selected" : ""}>${v}</option>`).join("")}
-            </select>
-            <button id="saveWatcher" class="touch-target rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-white transition hover:border-pink-400 light:border-slate-200 light:bg-slate-50 light:text-slate-950">${icon("save", "mr-1 inline h-4 w-4")} Save</button>
+          <div class="mt-4 grid gap-3 sm:grid-cols-3">
+            <div class="flex flex-col gap-1">
+              <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Admin/Watcher Username</label>
+              <input id="watcherAdminUsername" value="${escapeHtml(state.watcher.adminUsername || '')}" placeholder="e.g. my_watcher_bot" class="touch-target rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base outline-none transition focus:border-pink-400 light:border-slate-200 light:bg-slate-50 light:text-slate-950 sm:text-sm" />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Admin Session ID (Cookie)</label>
+              <input id="watcherAdminSessionId" type="password" value="${escapeHtml(state.watcher.adminSessionId || '')}" placeholder="sessionid cookie value" class="touch-target rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base outline-none transition focus:border-pink-400 light:border-slate-200 light:bg-slate-50 light:text-slate-950 sm:text-sm" />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Target Username (To Watch)</label>
+              <input id="watcherTargetUsername" value="${escapeHtml(state.watcher.targetUsername || state.watcher.username || '')}" placeholder="e.g. target_user" class="touch-target rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base outline-none transition focus:border-pink-400 light:border-slate-200 light:bg-slate-50 light:text-slate-950 sm:text-sm" />
+            </div>
           </div>
-          <div class="mt-3 grid gap-3 sm:grid-cols-3">
-            <button id="startWatcher" ${!state.watcher.username || isRunning ? "disabled" : ""} class="touch-target rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-3 text-sm font-bold text-white shadow-glow transition enabled:hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40">${icon("play", "mr-1 inline h-4 w-4")} Start 24/7</button>
+          <div class="mt-3 grid gap-3 sm:grid-cols-[1fr_125px]">
+            <div class="flex flex-col gap-1">
+              <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Check Interval </label>
+              <select id="syncInterval" class="touch-target rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none light:border-slate-200 light:bg-slate-50 light:text-slate-950">
+                ${Object.keys(SYNC_INTERVALS).map(v => `<option value="${v}" ${state.watcher.interval === v ? "selected" : ""}>${v}</option>`).join("")}
+              </select>
+            </div>
+            <div class="flex items-end">
+              <button id="saveWatcher" class="touch-target w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-white transition hover:border-pink-400 light:border-slate-200 light:bg-slate-50 light:text-slate-950">${icon("save", "mr-1 inline h-4 w-4")} Save settings</button>
+            </div>
+          </div>
+          <p class="mt-2 text-xs text-slate-400 leading-normal light:text-slate-600">
+            💡 <strong>Connection setup:</strong> Put your admin account (the secondary account doing the watching) and its active <code>sessionid</code> (found in browser cookies after logging in). Enter the target user to watch. If Session ID is blank, it runs in simulated Demo mode.
+          </p>
+          <div class="mt-4 grid gap-3 sm:grid-cols-3">
+            <button id="startWatcher" ${!(state.watcher.targetUsername || state.watcher.username) || isRunning ? "disabled" : ""} class="touch-target rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-3 text-sm font-bold text-white shadow-glow transition enabled:hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-40">${icon("play", "mr-1 inline h-4 w-4")} Start 24/7</button>
             <button id="stopWatcher" ${!isRunning ? "disabled" : ""} class="touch-target rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm font-bold text-amber-200 transition enabled:hover:border-amber-300 disabled:cursor-not-allowed disabled:opacity-40">${icon("pause", "mr-1 inline h-4 w-4")} Pause</button>
             <button id="connectWatcher" ${syncButtonDisabled() ? "disabled" : ""} class="touch-target rounded-2xl bg-gradient-to-r from-violet-500 to-pink-500 px-4 py-3 text-sm font-bold text-white shadow-glow transition enabled:hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50">${syncButtonLabel()}</button>
           </div>
@@ -739,6 +772,7 @@
             <span id="nextSyncBadge" class="rounded-full bg-white/5 px-3 py-1.5 light:bg-slate-100">Next safe check: ${nextSyncText()}</span>
             <span id="cooldownBadge" class="rounded-full bg-white/5 px-3 py-1.5 light:bg-slate-100">${cooldownBadgeText()}</span>
             <span class="rounded-full bg-white/5 px-3 py-1.5 light:bg-slate-100">${state.serverMode ? (state.freeTier ? "Free tier · low data mode" : "Server: online") : "Mode: browser only"}</span>
+            <span class="rounded-full bg-white/5 px-3 py-1.5 light:bg-slate-100">${state.serverMode ? (state.storageType === "gist" ? "Storage: Gist (persistent)" : "Storage: local (ephemeral)") : "Storage: browser"}</span>
           </div>
         </section>
       `;
@@ -1120,14 +1154,19 @@
     }
 
     async function saveWatcherSettings() {
-      const username = normalizeUsername(document.getElementById("watcherUsername").value);
+      const adminUsername = document.getElementById("watcherAdminUsername").value.trim();
+      const adminSessionId = document.getElementById("watcherAdminSessionId").value.trim();
+      const targetUsername = normalizeUsername(document.getElementById("watcherTargetUsername").value);
       const interval = document.getElementById("syncInterval").value;
-      if (!username) return;
-      state.watcher.username = username;
+      if (!targetUsername) return;
+      state.watcher.adminUsername = adminUsername;
+      state.watcher.adminSessionId = adminSessionId;
+      state.watcher.targetUsername = targetUsername;
+      state.watcher.username = targetUsername;
       state.watcher.interval = interval;
       state.watcher.connected = true;
       if (state.serverMode) {
-        state.watcher = normalizeSettings(await API.send("PUT", "/api/watcher", { username, interval }));
+        state.watcher = normalizeSettings(await API.send("PUT", "/api/watcher", { adminUsername, adminSessionId, targetUsername, interval }));
         await refreshFromServer();
       } else {
         saveSettings();
@@ -1137,14 +1176,15 @@
     }
 
     async function startWatcherMonitoring() {
-      const username = normalizeUsername(document.getElementById("watcherUsername")?.value || state.watcher.username);
-      if (!username) return;
+      const targetUsername = normalizeUsername(document.getElementById("watcherTargetUsername")?.value || state.watcher.targetUsername || state.watcher.username);
+      if (!targetUsername) return;
       if (state.serverMode) {
         await saveWatcherToServer();
         state.watcher = normalizeSettings(await API.send("POST", "/api/watcher/start"));
         await refreshFromServer();
       } else {
-        state.watcher.username = username;
+        state.watcher.targetUsername = targetUsername;
+        state.watcher.username = targetUsername;
         state.watcher.running = true;
         state.watcher.connected = true;
         saveSettings();
@@ -1169,9 +1209,11 @@
     }
 
     async function saveWatcherToServer() {
-      const username = normalizeUsername(document.getElementById("watcherUsername")?.value || state.watcher.username);
+      const adminUsername = document.getElementById("watcherAdminUsername")?.value.trim() ?? state.watcher.adminUsername;
+      const adminSessionId = document.getElementById("watcherAdminSessionId")?.value.trim() ?? state.watcher.adminSessionId;
+      const targetUsername = normalizeUsername(document.getElementById("watcherTargetUsername")?.value ?? state.watcher.targetUsername ?? state.watcher.username);
       const interval = document.getElementById("syncInterval")?.value || state.watcher.interval;
-      state.watcher = normalizeSettings(await API.send("PUT", "/api/watcher", { username, interval }));
+      state.watcher = normalizeSettings(await API.send("PUT", "/api/watcher", { adminUsername, adminSessionId, targetUsername, interval }));
     }
 
     async function clearLogs() {
@@ -1201,9 +1243,12 @@
     }
 
     function handleWatcherAction() {
-      const username = normalizeUsername(document.getElementById("watcherUsername").value);
-      if (!username) return;
-      state.watcher.username = username;
+      const targetUsername = normalizeUsername(document.getElementById("watcherTargetUsername").value);
+      if (!targetUsername) return;
+      state.watcher.adminUsername = document.getElementById("watcherAdminUsername").value.trim();
+      state.watcher.adminSessionId = document.getElementById("watcherAdminSessionId").value.trim();
+      state.watcher.targetUsername = targetUsername;
+      state.watcher.username = targetUsername;
       state.watcher.interval = document.getElementById("syncInterval").value;
       if (state.serverMode) {
         manualServerSync();
@@ -1242,8 +1287,8 @@
       if (state.syncInProgress) return;
       if (state.watcher.connected && cooldownRemainingMs() > 0) return;
 
-      const username = normalizeUsername(state.watcher.username || document.getElementById("watcherUsername")?.value);
-      if (!username) return;
+      const targetUsername = normalizeUsername(state.watcher.targetUsername || state.watcher.username || document.getElementById("watcherTargetUsername")?.value);
+      if (!targetUsername) return;
 
       state.syncInProgress = true;
       refreshWatcherHealth();
@@ -1254,17 +1299,18 @@
 
       try {
         const latest = latestSnapshot();
-        const followerPool = uniqueUsernames([...latest.followers, username + ".friend", "fresh.creator", "local.watch"]);
+        const followerPool = uniqueUsernames([...latest.followers, targetUsername + ".friend", "fresh.creator", "local.watch"]);
         const followingPool = uniqueUsernames([...latest.following, "brand.archive", "visual.notes"]);
         const maybeDrop = followerPool.filter((_, index) => index !== 1 || Math.random() > .5);
 
-        state.watcher.username = username;
+        state.watcher.targetUsername = targetUsername;
+        state.watcher.username = targetUsername;
         state.watcher.connected = true;
         state.watcher.lastSync = new Date().toISOString();
         clearRateLimitState();
         refreshWatcherHealth();
 
-        state.snapshots.push(makeSnapshot(`Watcher sync @${username}`, maybeDrop, followingPool));
+        state.snapshots.push(makeSnapshot(`Watcher sync @${targetUsername}`, maybeDrop, followingPool));
         saveSettings();
         saveSnapshots();
         if (!automatic) state.tab = "all";

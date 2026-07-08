@@ -69,6 +69,27 @@ If Render lets you sign up without a card:
 
 This wakes Render and triggers sync checks even when the built-in scheduler is asleep.
 
+### Persistent storage on Render Free plan via GitHub Gist
+
+Render's Free tier does not support persistent disks (ephemeral filesystem only). Any local watcher configuration, logs, or snapshots will be lost when the service restarts or goes to sleep. To keep your data free & persistent forever:
+
+1. Go to [gist.github.com](https://gist.github.com) (make sure you are logged into your GitHub account).
+2. Create a new **Secret Gist**:
+   - Filename: `db.json`
+   - Content: `{}`
+   - Click "Create secret gist".
+3. Copy the Gist ID from the URL (e.g. if the URL is `https://gist.github.com/username/abc123xyz`, `abc123xyz` is your Gist ID).
+4. Create a Classic **Personal Access Token** (PAT) on GitHub:
+   - Go to GitHub Settings → Developer Settings → Personal Access Tokens → Tokens (classic).
+   - Click "Generate new token" (classic).
+   - Select the `gist` checkbox.
+   - Click "Generate token" and copy it.
+5. In your Render Dashboard, go to your Web Service → Settings → Environment Variables, and add:
+   - `GIST_ID`: Your copied Gist ID.
+   - `GITHUB_TOKEN`: Your copied Personal Access Token.
+
+The app will automatically detect these variables and save all database progress to your private Gist.
+
 ---
 
 ## After deploy

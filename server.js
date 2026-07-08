@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const express = require("express");
 const path = require("path");
 const {
+  initDb,
   readDb,
   mutateDb,
   addLog,
@@ -38,6 +39,9 @@ app.get("/api/watcher", (_req, res) => {
 app.put("/api/watcher", (req, res) => {
   try {
     const watcher = saveWatcherSettings({
+      adminUsername: req.body.adminUsername,
+      adminSessionId: req.body.adminSessionId,
+      targetUsername: req.body.targetUsername,
       username: req.body.username,
       interval: req.body.interval
     });
@@ -168,7 +172,14 @@ app.get("*", (_req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-app.listen(PORT, HOST, () => {
-  console.log(`Instagram Watcher running on http://${HOST}:${PORT}`);
-  startScheduler();
-});
+(async () => {
+  try {
+    await initDb();
+  } catch (err) {
+    console.error("Failed to initialize database:", err);
+  }
+  app.listen(PORT, HOST, () => {
+    console.log(`Instagram Watcher running on http://${HOST}:${PORT}`);
+    startScheduler();
+  });
+})();
