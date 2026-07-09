@@ -42,6 +42,7 @@ app.put("/api/watcher", (req, res) => {
       adminUsername: req.body.adminUsername,
       adminSessionId: req.body.adminSessionId,
       targetUsername: req.body.targetUsername,
+      targetUserId: req.body.targetUserId,
       username: req.body.username,
       interval: req.body.interval
     });

@@ -226,6 +226,7 @@
         adminUsername: "",
         adminSessionId: "",
         targetUsername: "",
+        targetUserId: "",
         username: "", // kept for backwards-compatibility checks
         connected: false,
         running: false,
@@ -900,12 +901,16 @@
               <input id="watcherTargetUsername" value="${escapeHtml(state.watcher.targetUsername || state.watcher.username || '')}" placeholder="e.g. target_user" class="touch-target rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base outline-none transition focus:border-pink-400 light:border-slate-200 light:bg-slate-50 light:text-slate-950 sm:text-sm" />
             </div>
           </div>
-          <div class="mt-3 grid gap-3 sm:grid-cols-[1fr_125px]">
+          <div class="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_125px]">
             <div class="flex flex-col gap-1">
               <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Check Interval </label>
               <select id="syncInterval" class="touch-target rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm outline-none light:border-slate-200 light:bg-slate-50 light:text-slate-950">
                 ${Object.keys(SYNC_INTERVALS).map(v => `<option value="${v}" ${state.watcher.interval === v ? "selected" : ""}>${v}</option>`).join("")}
               </select>
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Target User ID (Optional)</label>
+              <input id="watcherTargetUserId" value="${escapeHtml(state.watcher.targetUserId || '')}" placeholder="Numeric ID (skips profile API)" class="touch-target rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base outline-none transition focus:border-pink-400 light:border-slate-200 light:bg-slate-50 light:text-slate-950 sm:text-sm" />
             </div>
             <div class="flex items-end">
               <button id="saveWatcher" class="touch-target w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-white transition hover:border-pink-400 light:border-slate-200 light:bg-slate-50 light:text-slate-950">${icon("save", "mr-1 inline h-4 w-4")} Save settings</button>
@@ -1337,16 +1342,18 @@
       const adminUsername = document.getElementById("watcherAdminUsername").value.trim();
       const adminSessionId = document.getElementById("watcherAdminSessionId").value.trim();
       const targetUsername = normalizeUsername(document.getElementById("watcherTargetUsername").value);
+      const targetUserId = document.getElementById("watcherTargetUserId")?.value.trim() || "";
       const interval = document.getElementById("syncInterval").value;
       if (!targetUsername) return;
       state.watcher.adminUsername = adminUsername;
       state.watcher.adminSessionId = adminSessionId;
       state.watcher.targetUsername = targetUsername;
       state.watcher.username = targetUsername;
+      state.watcher.targetUserId = targetUserId;
       state.watcher.interval = interval;
       state.watcher.connected = true;
       if (state.serverMode) {
-        state.watcher = normalizeSettings(await API.send("PUT", "/api/watcher", { adminUsername, adminSessionId, targetUsername, interval }));
+        state.watcher = normalizeSettings(await API.send("PUT", "/api/watcher", { adminUsername, adminSessionId, targetUsername, targetUserId, interval }));
         await refreshFromServer();
       } else {
         saveSettings();
@@ -1392,8 +1399,9 @@
       const adminUsername = document.getElementById("watcherAdminUsername")?.value.trim() ?? state.watcher.adminUsername;
       const adminSessionId = document.getElementById("watcherAdminSessionId")?.value.trim() ?? state.watcher.adminSessionId;
       const targetUsername = normalizeUsername(document.getElementById("watcherTargetUsername")?.value ?? state.watcher.targetUsername ?? state.watcher.username);
+      const targetUserId = document.getElementById("watcherTargetUserId")?.value.trim() ?? state.watcher.targetUserId;
       const interval = document.getElementById("syncInterval")?.value || state.watcher.interval;
-      state.watcher = normalizeSettings(await API.send("PUT", "/api/watcher", { adminUsername, adminSessionId, targetUsername, interval }));
+      state.watcher = normalizeSettings(await API.send("PUT", "/api/watcher", { adminUsername, adminSessionId, targetUsername, targetUserId, interval }));
     }
 
     async function clearLogs() {
