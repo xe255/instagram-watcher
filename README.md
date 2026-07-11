@@ -13,13 +13,13 @@ Open **http://localhost:3000** on your phone or desktop.
 
 ## How it works
 
-1. **Save** your Instagram username and check interval (default: every 5 minutes)
+1. **Save** your Instagram username and check interval (default: every **30 minutes** — do not use 5m with a real session)
 2. **Start 24/7** — the server runs checks in the background, even when you close the browser
 3. **Pause** anytime from the dashboard — your settings stay saved
 4. **Logs tab** — see every sync, start/stop, and error
 5. **Import** official Instagram export files as a fallback
 
-Rate-limit protection: minimum 5-minute gap, random jitter, exponential backoff on errors.
+Rate-limit protection: interval cooldown, spam-flag detection (`feedback_required`), auto-pause + multi-hour backoff, and manual sync blocked while backoff is active.
 
 ---
 

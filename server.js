@@ -55,6 +55,7 @@ app.put("/api/watcher", (req, res) => {
 app.post("/api/watcher/start", (_req, res) => {
   try {
     const watcher = startWatcher();
+    // Kick off a sync, but performSync will no-op if Instagram backoff is active.
     performSync({ manual: true, source: "start" }).catch(console.error);
     res.json(refreshHealth(watcher));
   } catch (error) {

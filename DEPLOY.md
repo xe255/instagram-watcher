@@ -64,8 +64,8 @@ If Render lets you sign up without a card:
 2. Build: `npm install` · Start: `npm start`
 3. Add env `CRON_SECRET=your-random-secret`
 4. On [cron-job.org](https://cron-job.org) (free, no card):
-   - URL: `https://YOUR-APP.onrender.com/api/cron/tick?secret=your-random-secret`
-   - Every **5 minutes**
+  - URL: `https://YOUR-APP.onrender.com/api/cron/tick?secret=your-random-secret`
+  - Every **30–60 minutes** (not 5 — Instagram will flag the session)
 
 This wakes Render and triggers sync checks even when the built-in scheduler is asleep.
 

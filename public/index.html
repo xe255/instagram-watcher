@@ -230,7 +230,7 @@
         username: "", // kept for backwards-compatibility checks
         connected: false,
         running: false,
-        interval: "5m",
+        interval: "30m",
         lastSync: null,
         health: "Ready",
         rateLimitUntil: null,
@@ -245,7 +245,7 @@
       if (merged.username && !merged.targetUsername) {
         merged.targetUsername = merged.username;
       }
-      if (!SYNC_INTERVALS[merged.interval]) merged.interval = "5m";
+      if (!SYNC_INTERVALS[merged.interval]) merged.interval = "30m";
       merged.consecutiveErrors = Number(merged.consecutiveErrors) || 0;
       merged.rateLimitUntil = merged.rateLimitUntil || null;
       merged.running = Boolean(merged.running);
@@ -882,7 +882,7 @@
             <div>
               <p class="text-sm font-semibold uppercase tracking-[.22em] text-pink-300">Watcher sync</p>
               <h2 class="mt-1 text-xl font-bold text-white light:text-slate-950 sm:text-2xl">${isRunning ? "Running 24/7" : "Connect a watcher profile"}</h2>
-              <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-400 light:text-slate-600">Save your username and interval — the server keeps checking every 5 minutes with rate-limit protection, even when you close this tab.</p>
+              <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-400 light:text-slate-600">Save your username and interval — use <strong>30m–1h</strong> for real Instagram sessions. Syncing every 5 minutes will get the account flagged.</p>
             </div>
             <div data-watcher-health class="flex items-center gap-2 rounded-2xl border ${isRunning ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300" : "border-amber-400/20 bg-amber-400/10 text-amber-300"} px-3 py-2 text-sm font-semibold">
               ${icon(isRunning ? "play-circle" : "pause-circle", "h-4 w-4")} ${state.watcher.health}
@@ -1296,18 +1296,28 @@
     }
 
     function canSyncNow() {
-      return !state.syncInProgress;
+      if (state.syncInProgress) return false;
+      const rateLimitUntil = state.watcher.rateLimitUntil ? new Date(state.watcher.rateLimitUntil).getTime() : 0;
+      if (rateLimitUntil > Date.now()) return false;
+      return true;
     }
 
     function syncButtonLabel() {
       if (state.syncInProgress) return "Syncing...";
+      const rateLimitUntil = state.watcher.rateLimitUntil ? new Date(state.watcher.rateLimitUntil).getTime() : 0;
+      if (rateLimitUntil > Date.now()) {
+        const mins = Math.ceil((rateLimitUntil - Date.now()) / 60000);
+        return `Backoff ${mins}m`;
+      }
       const remaining = cooldownRemainingMs();
       if (remaining > 0) return "Force Sync Now";
       return "Sync now";
     }
 
     function syncButtonDisabled() {
-      return state.syncInProgress;
+      if (state.syncInProgress) return true;
+      const rateLimitUntil = state.watcher.rateLimitUntil ? new Date(state.watcher.rateLimitUntil).getTime() : 0;
+      return rateLimitUntil > Date.now();
     }
 
     function cooldownBadgeText() {
@@ -1372,9 +1382,14 @@
       const targetUsername = normalizeUsername(document.getElementById("watcherTargetUsername")?.value || state.watcher.targetUsername || state.watcher.username);
       if (!targetUsername) return;
       if (state.serverMode) {
-        await saveWatcherToServer();
-        state.watcher = normalizeSettings(await API.send("POST", "/api/watcher/start"));
-        await refreshFromServer();
+        try {
+          await saveWatcherToServer();
+          state.watcher = normalizeSettings(await API.send("POST", "/api/watcher/start"));
+          await refreshFromServer();
+        } catch (error) {
+          alert(error.message || "Could not start watcher");
+          await refreshFromServer().catch(() => {});
+        }
       } else {
         state.watcher.targetUsername = targetUsername;
         state.watcher.username = targetUsername;
@@ -1460,15 +1475,30 @@
 
     async function manualServerSync() {
       if (state.syncInProgress) return;
+      // Respect server-side Instagram backoff — retrying extends the ban.
+      const rateLimitUntil = state.watcher.rateLimitUntil ? new Date(state.watcher.rateLimitUntil).getTime() : 0;
+      if (rateLimitUntil > Date.now()) {
+        const mins = Math.ceil((rateLimitUntil - Date.now()) / 60000);
+        alert(`Instagram backoff is active. Wait ~${mins} more minute(s) before syncing again.\n\nOpen Instagram as the admin account and resolve any checkpoint if shown.`);
+        return;
+      }
       state.syncInProgress = true;
       render();
       try {
-        await saveWatcherToServer();
+        // Do not save settings before sync — that used to clear rate-limit backoff.
         const result = await API.send("POST", "/api/watcher/sync");
         state.watcher = normalizeSettings(result.watcher);
         await refreshFromServer();
-        if (result.skipped) state.uploadStatus = "idle";
-        else state.tab = "all";
+        if (result.skipped) {
+          if (result.reason === "rate_limited") {
+            alert(result.detail || "Sync blocked by Instagram backoff. Wait before trying again.");
+          }
+          state.uploadStatus = "idle";
+        } else if (!result.ok && result.reason) {
+          // Sync ran and failed — watcher state already has lastError from server.
+        } else {
+          state.tab = "all";
+        }
       } catch (error) {
         console.error(error);
       } finally {
@@ -1565,12 +1595,10 @@
           button.disabled = syncButtonDisabled();
           button.textContent = syncButtonLabel();
         }
-
-        // Auto-sync trigger from browser if due in serverMode
-        if (state.serverMode && state.watcher.running && !state.syncInProgress && cooldownRemainingMs() === 0) {
-          console.log("[browser] Sync is due, triggering server-side sync...");
-          manualServerSync().catch(console.error);
-        }
+        // Do NOT auto-trigger syncs from the browser in serverMode.
+        // The server scheduler owns that. An open dashboard tab was previously
+        // calling manualServerSync() every second when cooldown hit 0, which
+        // hammered Instagram and caused feedback_required / is_spam flags.
       }, 1000);
     }
 
